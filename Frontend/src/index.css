@@ -1,0 +1,180 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap');
+
+@import "tailwindcss";
+
+:root {
+  --gold: #d4af37;
+  --gold-light: #f4e4bc;
+  --gold-dark: #8b6914;
+  --ink: #0a0908;
+  --parchment: #f5f0e6;
+}
+
+@layer utilities {
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes glow {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(212, 175, 55, 0.3)); }
+    50% { filter: drop-shadow(0 0 40px rgba(212, 175, 55, 0.5)); }
+  }
+  @keyframes bounceDown {
+    0%, 100% { transform: translateY(0); opacity: 1; }
+    50% { transform: translateY(8px); opacity: 0.7; }
+  }
+  .animate-slideDown { animation: slideDown 0.3s ease-out; }
+  .animate-bounceDown { animation: bounceDown 2s ease-in-out infinite; }
+  .animate-fadeInUp { animation: fadeInUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+  .animate-fadeInUp-delay-1 { animation: fadeInUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards; opacity: 0; }
+  .animate-fadeInUp-delay-2 { animation: fadeInUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards; opacity: 0; }
+  .animate-glow { animation: glow 4s ease-in-out infinite; }
+
+  /* Boutons (autres pages) */
+  .valoria-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s;
+  }
+  .valoria-btn-xl {
+    padding: 1rem 2rem;
+    font-size: 1.125rem;
+    border-radius: 1rem;
+    gap: 0.75rem;
+  }
+  .valoria-btn-xl svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  .valoria-btn-gold {
+    background-color: #f59e0b;
+    color: #0f172a;
+    box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.25);
+  }
+  .valoria-btn-gold:hover {
+    background-color: #fbbf24;
+    box-shadow: 0 20px 25px -5px rgba(245, 158, 11, 0.3);
+    transform: translateY(-2px);
+  }
+  .valoria-btn-discord {
+    background-color: #5865F2;
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.25);
+  }
+  .valoria-btn-discord:hover {
+    background-color: #4752C4;
+    box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.3);
+    transform: translateY(-2px);
+  }
+  .valoria-btn-outline {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(8px);
+  }
+  .valoria-btn-outline:hover {
+    background-color: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.5);
+    transform: translateY(-2px);
+  }
+  .valoria-btn-cta {
+    background-color: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.25);
+    backdrop-filter: blur(12px);
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+  }
+  .valoria-btn-xl.valoria-btn-cta {
+    padding: 1rem 2rem;
+  }
+  .valoria-btn-cta:hover {
+    background-color: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.4);
+    transform: translateY(-2px);
+  }
+  .valoria-btn-cta-main {
+    background-color: #f59e0b;
+    color: #0f172a;
+    border-color: #fbbf24;
+    box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.3);
+  }
+  .valoria-btn-cta-main:hover {
+    background-color: #fbbf24;
+    box-shadow: 0 20px 25px -5px rgba(245, 158, 11, 0.35);
+  }
+  .valoria-btn-info {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(8px);
+    cursor: default;
+  }
+  .valoria-btn-outline-dark {
+    border: 2px solid #334155;
+    color: #334155;
+  }
+  .valoria-btn-outline-dark:hover {
+    background-color: #334155;
+    color: white;
+    transform: translateY(-2px);
+  }
+  /* Aliases pour compatibilité */
+  .btn-valoria-primary,
+  .btn-valoria-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    background-color: #d97706;
+    color: #0c0a09;
+  }
+  .btn-valoria-primary:hover,
+  .btn-valoria-secondary:hover {
+    background-color: #f59e0b;
+    transform: translateY(-1px);
+  }
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.0625rem;
+  background: var(--ink);
+  color: var(--parchment);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Cinzel', serif;
+}
+
+/* Grain overlay pour profondeur */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+}

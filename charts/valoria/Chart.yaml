@@ -1,0 +1,9 @@
+apiVersion: v2
+name: valoria
+description: Chart Valoria - Frontend (nginx)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - valoria
+  - web

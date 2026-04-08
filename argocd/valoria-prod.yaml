@@ -1,0 +1,27 @@
+# Application ArgoCD pour l'environnement Prod
+# À appliquer : kubectl apply -f argocd/valoria-prod.yaml -n argocd
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: valoria
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/REPLACE_ME/Valoria-Argo-Repo
+    targetRevision: main
+    path: charts/valoria
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: valoria
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

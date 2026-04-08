@@ -1,0 +1,11 @@
+namespace: valoria-dev
+
+frontend:
+  image: ghcr.io/REPLACE_ME/valoria-front:dev
+  imagePullPolicy: Always
+  replicas: 1
+  serviceType: NodePort
+
+nginx:
+  apiProxy:
+    enabled: false

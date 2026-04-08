@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: valoria-front
+  namespace: {{ include "valoria.namespace" . }}
+  labels:
+    {{- include "valoria.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.frontend.serviceType }}
+  selector:
+    app: valoria-front
+  ports:
+  - protocol: TCP
+    port: {{ .Values.frontend.port }}
+    targetPort: {{ .Values.frontend.port }}
