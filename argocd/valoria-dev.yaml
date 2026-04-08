@@ -10,8 +10,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/REPLACE_ME/Valoria-Argo-Repo
-    targetRevision: develop
+    repoURL: https://github.com/emmguardia/Valoria-Argo-Repo.git
+    targetRevision: dev
     path: charts/valoria
     helm:
       valueFiles:

@@ -1,0 +1,192 @@
+name: Build and push to GHCR
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build (dev or prod tag)'
+        required: true
+        default: 'main'
+        type: choice
+        options:
+          - main
+          - dev
+
+env:
+  REGISTRY: ghcr.io
+  TRIVY_IMAGE: aquasec/trivy:0.69.3
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-and-push-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test & security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Frontend – install
+        working-directory: Frontend
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Frontend – audit (moderate+)
+        run: cd Frontend && npm audit --audit-level=moderate
+
+      - name: Frontend – lint
+        run: cd Frontend && npm run lint -- --max-warnings 999
+
+      - name: Frontend – build
+        run: cd Frontend && npm run build
+
+  build-and-push:
+    name: Build and push
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tag (dev vs prod)
+        id: tag
+        run: |
+          BRANCH="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.ref_name }}"
+          if [ "$BRANCH" = "dev" ]; then
+            TAG="dev"
+            IS_DEV="true"
+          else
+            CONTENT=$(cat version.txt | tr -d '\r\n ')
+            MAJOR=$(echo "$CONTENT" | cut -d. -f1)
+            MINOR=$(echo "$CONTENT" | cut -d. -f2)
+            PATCH=$(echo "$CONTENT" | cut -d. -f3)
+            if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$PATCH" =~ ^[0-9]+$ ]]; then
+              echo "version.txt invalide: $CONTENT (attendu X.Y.Z)"
+              exit 1
+            fi
+            if [ "$PATCH" -lt 9 ]; then
+              PATCH=$((PATCH + 1))
+            else
+              PATCH=0
+              MINOR=$((MINOR + 1))
+            fi
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            echo "$NEW_VERSION" > version.txt
+            TAG="v${NEW_VERSION}"
+            IS_DEV="false"
+          fi
+          echo "IMAGE_TAG=$TAG" >> $GITHUB_ENV
+          echo "IS_DEV=$IS_DEV" >> $GITHUB_ENV
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is_dev=$IS_DEV" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/valoria-front
+          tags: |
+            type=raw,value=${{ steps.tag.outputs.tag }}
+
+      - name: Build and push frontend
+        id: build-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          no-cache: true
+          pull: true
+
+      - name: Trivy scan (frontend)
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+            ${{ env.TRIVY_IMAGE }} image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed --format table \
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/valoria-front:${{ steps.tag.outputs.tag }}
+
+      - name: Pin Helm values to image digest
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          IS_DEV="${{ steps.tag.outputs.is_dev }}"
+          DIGEST_FRONTEND="${{ steps.build-frontend.outputs.digest }}"
+          OWNER="${{ github.repository_owner }}"
+          REG="${{ env.REGISTRY }}"
+
+          if [ -n "$DIGEST_FRONTEND" ]; then
+            FRONTEND_IMAGE="${REG}/${OWNER}/valoria-front@${DIGEST_FRONTEND}"
+          else
+            FRONTEND_IMAGE="${REG}/${OWNER}/valoria-front:${TAG}"
+          fi
+
+          if [ "$IS_DEV" = "true" ]; then
+            VALUES_PATH="charts/valoria/values-dev.yaml"
+          else
+            VALUES_PATH="charts/valoria/values.yaml"
+          fi
+
+          sed -i "s|  image: ghcr.io/.*valoria-front.*|  image: ${FRONTEND_IMAGE}|" "$VALUES_PATH"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ "$IS_DEV" = "true" ]; then
+            git add "$VALUES_PATH"
+          else
+            git add version.txt "$VALUES_PATH"
+          fi
+
+          if git diff --staged --quiet; then
+            echo "Helm values already up to date, skip commit"
+          else
+            git commit -m "chore(helm): pin frontend image to digest $TAG [skip ci]"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push origin ${{ github.ref_name }}
+          fi

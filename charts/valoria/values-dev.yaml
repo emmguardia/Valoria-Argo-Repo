@@ -1,11 +1,24 @@
 namespace: valoria-dev
 
+sealedSecret:
+  enabled: false
+
 frontend:
-  image: ghcr.io/REPLACE_ME/valoria-front:dev
+  image: ghcr.io/emmguardia/valoria-front:dev
   imagePullPolicy: Always
   replicas: 1
-  serviceType: NodePort
+  serviceType: ClusterIP
 
 nginx:
   apiProxy:
     enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  host: valoria-dev.zenixweb.fr
+  tls:
+    enabled: true
+    secretName: valoria-dev-tls
