@@ -7,7 +7,7 @@ RUN apk update && apk upgrade --no-cache \
     && if [ -f package-lock.json ]; then npm ci --no-audit --no-fund --loglevel=error; else npm install --no-audit --no-fund --loglevel=error; fi
 
 COPY . .
-RUN npm run build
+RUN node ./node_modules/vite/bin/vite.js build
 
 FROM nginx:alpine
 
