@@ -32,28 +32,57 @@ const STORAGE_KEY = 'valoria_user';
 
 const defaultProfile: UserProfile = { pseudo: '', email: '' };
 
-export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [ecus, setEcus] = useState(0);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseRecord[]>([]);
+interface StoredUserState {
+  isLoggedIn: boolean;
+  ecus: number;
+  profile: UserProfile | null;
+  purchaseHistory: PurchaseRecord[];
+}
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        if (data.loggedIn) {
-          setIsLoggedIn(true);
-          setEcus(data.ecus ?? 0);
-          setProfile(data.profile ?? null);
-          setPurchaseHistory(data.purchaseHistory ?? []);
-        }
-      }
-    } catch {
-      // ignore
+function readStoredUser(): StoredUserState {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      return {
+        isLoggedIn: false,
+        ecus: 0,
+        profile: null as UserProfile | null,
+        purchaseHistory: [] as PurchaseRecord[],
+      };
     }
-  }, []);
+
+    const data = JSON.parse(stored);
+    if (!data?.loggedIn) {
+      return {
+        isLoggedIn: false,
+        ecus: 0,
+        profile: null as UserProfile | null,
+        purchaseHistory: [] as PurchaseRecord[],
+      };
+    }
+
+    return {
+      isLoggedIn: true,
+      ecus: data.ecus ?? 0,
+      profile: data.profile ?? null,
+      purchaseHistory: data.purchaseHistory ?? [],
+    };
+  } catch {
+    return {
+      isLoggedIn: false,
+      ecus: 0,
+      profile: null as UserProfile | null,
+      purchaseHistory: [] as PurchaseRecord[],
+    };
+  }
+}
+
+export function UserProvider({ children }: { children: React.ReactNode }) {
+  const initial: StoredUserState = readStoredUser();
+  const [isLoggedIn, setIsLoggedIn] = useState(initial.isLoggedIn);
+  const [ecus, setEcus] = useState(initial.ecus);
+  const [profile, setProfile] = useState<UserProfile | null>(initial.profile);
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseRecord[]>(initial.purchaseHistory);
 
   const persist = useCallback(
     (loggedIn: boolean, ecusAmount: number, prof: UserProfile | null, history: PurchaseRecord[]) => {

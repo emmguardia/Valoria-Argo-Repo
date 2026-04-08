@@ -6,7 +6,6 @@ export function useProducts() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     const data = getMockProducts();
     const timer = setTimeout(() => {
       setProducts(data);

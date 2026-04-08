@@ -1,4 +1,4 @@
-import { Swords, Crown, Banknote, Briefcase, Target, Vote } from 'lucide-react';
+import { Crown, Banknote, Briefcase, Target, Vote } from 'lucide-react';
 import SEO from '../components/SEO';
 
 const MOCK_PLAYERS = [
