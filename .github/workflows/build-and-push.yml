@@ -65,6 +65,12 @@ jobs:
       - name: Frontend – build
         run: cd Frontend && npm run build
 
+      - name: Frontend – bundle budget
+        run: cd Frontend && node scripts/check-bundle-budget.mjs
+
+      - name: Frontend – bundle analysis report
+        run: cd Frontend && node scripts/analyze-bundle.mjs
+
       - name: "Trivy config scan (IaC: charts + argocd)"
         run: |
           docker run --rm \

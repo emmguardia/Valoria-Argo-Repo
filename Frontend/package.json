@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:analyze": "vite build && node scripts/analyze-bundle.mjs",
+    "build:budget": "vite build && node scripts/check-bundle-budget.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
