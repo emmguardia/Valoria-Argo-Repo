@@ -9,7 +9,7 @@ imagePullSecrets:
 
 frontend:
   # Image nginx (build du Frontend)
-  image: ghcr.io/emmguardia/valoria-front@sha256:debac3247e83f28706eae51fe33d4f0ace948b2e6c52e65c0ad77947aed7cdd1
+  image: ghcr.io/emmguardia/valoria-front@sha256:9b3bf735de6cac7f022efec1f8442656d4ed1dd0d1a1e463f3228aaf99631858
   imagePullPolicy: IfNotPresent
   replicas: 1
   serviceType: ClusterIP
