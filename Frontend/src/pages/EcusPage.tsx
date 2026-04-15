@@ -13,16 +13,31 @@ const ECUS_PACKS = [
 
 export default function EcusPage() {
   const navigate = useNavigate();
-  const { isLoggedIn, addEcus } = useUser();
+  const { isLoggedIn, profile } = useUser();
 
-  const handleBuyPack = (ecus: number) => {
+  const handleBuyPack = async (ecus: number) => {
     if (!isLoggedIn) {
       navigate('/connexion');
       return;
     }
-    // Frontend only : simule l'achat en créditant les Écus
-    addEcus(ecus);
-    // TODO: intégrer Stripe/paiement réel
+    const response = await fetch('/api/tebex/checkout-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pack: ecus,
+        username: profile?.pseudo?.trim() || undefined,
+      }),
+    });
+    if (!response.ok) {
+      window.alert("Le paiement Tebex n'est pas disponible pour ce pack pour le moment.");
+      return;
+    }
+    const data = (await response.json()) as { url?: string };
+    if (!data.url) {
+      window.alert('Réponse Tebex invalide.');
+      return;
+    }
+    window.location.assign(data.url);
   };
 
   return (
@@ -88,7 +103,7 @@ export default function EcusPage() {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-gray-500">
-            Démo : en frontend, un clic crédite les Écus. Le paiement réel sera intégré plus tard.
+            Paiement géré par Tebex via backend sécurisé.
           </p>
           <div className="mt-8 text-center">
             <Link to="/boutique" className="text-[#1e3a5f] font-semibold hover:underline">

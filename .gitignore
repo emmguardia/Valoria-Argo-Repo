@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+Backend/node_modules/
+Frontend/node_modules/
+
+# Build outputs
+Backend/dist/
+Frontend/dist/
+
+# Local secrets (never commit)
+charts/valoria/secrets/valoria-secrets.yaml
+charts/valoria/secrets/sealed-secrets-cert.pem
+charts/valoria/secrets/valoria-sealed.yaml
+
+# Env files
+.env
+.env.*

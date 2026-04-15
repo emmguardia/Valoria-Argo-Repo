@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valoria-backend
+  namespace: {{ include "valoria.namespace" . }}
+  labels:
+    {{- include "valoria.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: valoria-backend
+  template:
+    metadata:
+      labels:
+        app: valoria-backend
+    spec:
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      containers:
+      - name: backend
+        image: {{ .Values.backend.image }}
+        imagePullPolicy: {{ .Values.backend.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.backend.port }}
+        env:
+        - name: PORT
+          value: {{ .Values.backend.port | quote }}
+        - name: NODE_ENV
+          value: "production"
+        - name: TEBEX_CHECKOUT_BASE_URL
+          value: {{ .Values.tebex.checkoutBaseUrl | quote }}
+        - name: TEBEX_PACKAGE_IDS
+          value: {{ toJson .Values.tebex.packageIds | quote }}
+        - name: TEBEX_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: tebex-secret-key
+        - name: TEBEX_PUBLIC_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: tebex-public-token
+        - name: TEBEX_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: tebex-project-id
+        - name: TEBEX_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: tebex-secret-key
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.backend.port }}
+          initialDelaySeconds: 8
+          periodSeconds: 8
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.backend.port }}
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3

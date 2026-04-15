@@ -16,6 +16,13 @@ spec:
   - host: {{ .Values.ingress.host }}
     http:
       paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: valoria-backend
+            port:
+              number: {{ .Values.backend.port }}
       - path: /
         pathType: Prefix
         backend:
