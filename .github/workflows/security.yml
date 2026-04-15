@@ -60,4 +60,8 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             ${{ env.TRIVY_IMAGE }} config --exit-code 1 --severity CRITICAL,HIGH \
-            /workspace/charts /workspace/argocd
+            /workspace/charts
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            ${{ env.TRIVY_IMAGE }} config --exit-code 1 --severity CRITICAL,HIGH \
+            /workspace/argocd
