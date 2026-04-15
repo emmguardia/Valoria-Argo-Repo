@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: valoria-backend
   namespace: {{ include "valoria.namespace" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     {{- include "valoria.labels" . | nindent 4 }}
 spec:
