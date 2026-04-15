@@ -2,6 +2,7 @@ namespace: valoria-dev
 
 sealedSecret:
   enabled: false
+  encryptedData: {}
 
 frontend:
   image: ghcr.io/emmguardia/valoria-front:dev

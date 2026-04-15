@@ -2,6 +2,7 @@ namespace: valoria
 
 sealedSecret:
   enabled: false
+  encryptedData: {}
 
 imagePullSecrets:
   - name: ghcr-secret
