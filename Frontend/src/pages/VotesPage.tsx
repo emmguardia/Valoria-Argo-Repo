@@ -10,37 +10,33 @@ const VOTE_SITES = [
 
 export default function VotesPage() {
   return (
-    <div className="min-h-screen bg-[#fefce8]">
+    <div className="valoria-page-shell">
       <SEO
         title="Vote"
         description="Vote pour Valoria et soutiens le serveur sur les sites listés."
         keywords="vote, Valoria, Minecraft"
         url="/votes"
       />
-      <section className="relative py-20 bg-gradient-to-b from-[#1e3a5f] to-[#152a45] border-b border-[#f59e0b]/20">
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="uppercase tracking-[0.35em] text-xs text-[#fbbf24]/90 font-medium">Vote</p>
-          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl text-white mt-2">
-            Vote pour Valoria
-          </h1>
-          <p className="text-white/80 max-w-2xl mt-4">
-            Chaque vote compte ! Soutiens le serveur en votant sur les sites listés.
-          </p>
+      <section className="valoria-page-hero">
+        <div className="valoria-page-container">
+          <p className="valoria-page-kicker">Vote</p>
+          <h1 className="valoria-page-title">Vote pour Valoria</h1>
+          <p className="valoria-page-subtitle">Chaque vote compte ! Soutiens le serveur en votant sur les sites listés.</p>
         </div>
       </section>
-      <section className="py-12">
+      <section className="valoria-page-section">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 p-8 mb-10">
+          <div className="valoria-card p-8 mb-10">
             <div className="flex items-center gap-4 mb-6">
               <div className="p-4 bg-[#f59e0b]/20 rounded-xl">
                 <Gift className="w-8 h-8 text-[#f59e0b]" />
               </div>
               <div>
                 <h2 className="font-display text-xl text-gray-900">Récompenses</h2>
-                <p className="text-gray-600 text-sm">Vote sur chaque site (1 vote = 1 vote).</p>
+                <p className="valoria-text-muted text-sm">Vote sur chaque site (1 vote = 1 vote).</p>
               </div>
             </div>
-            <p className="text-gray-600">
+            <p className="valoria-text-muted">
               Connecte-toi avec ton pseudo Minecraft, vote sur les sites ci-dessous, et ton vote sera comptabilisé automatiquement.
               Le vote est distinct des Écus (monnaie de la boutique).
             </p>
@@ -53,7 +49,7 @@ export default function VotesPage() {
                 href={site.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 hover:border-[#f59e0b]/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200 group"
+                className="flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 hover:border-[#f59e0b]/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200 group focus-visible:ring-2 focus-visible:ring-[#f59e0b]"
               >
                 <div className="flex items-center gap-4">
                   <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-[#1e3a5f] text-white font-bold">
@@ -68,7 +64,7 @@ export default function VotesPage() {
               </a>
             ))}
           </div>
-          <p className="mt-8 text-center text-gray-500 text-sm">
+          <p className="mt-8 text-center text-gray-700 text-sm">
             Tu peux voter une fois par jour sur chaque site.
           </p>
         </div>

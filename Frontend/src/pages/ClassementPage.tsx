@@ -91,22 +91,18 @@ export default function ClassementPage() {
   })();
 
   return (
-    <div className="min-h-screen bg-[#fefce8]">
+    <div className="valoria-page-shell">
       <SEO
         title="Classement"
         description="Classements PvP Valoria : top joueurs et factions. Cash prizes mensuels."
         keywords="classement, Valoria, PvP, top joueurs, factions"
         url="/classement"
       />
-      <section className="relative py-20 bg-gradient-to-b from-[#1e3a5f] to-[#152a45] border-b border-[#f59e0b]/20">
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="uppercase tracking-[0.35em] text-xs text-[#fbbf24]/90 font-medium">Classement</p>
-          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl text-white mt-2">
-            Classements PvP
-          </h1>
-          <p className="text-white/80 max-w-2xl mt-4">
-            Top des joueurs et des factions. Montre qui domine le serveur. Classement à points, reset mensuel.
-          </p>
+      <section className="valoria-page-hero">
+        <div className="valoria-page-container">
+          <p className="valoria-page-kicker">Classement</p>
+          <h1 className="valoria-page-title">Classements PvP</h1>
+          <p className="valoria-page-subtitle">Top des joueurs et des factions. Montre qui domine le serveur. Classement à points, reset mensuel.</p>
           <div className="mt-10 p-6 sm:p-8 rounded-2xl bg-white/10 backdrop-blur-sm border border-[#f59e0b]/30">
             <div className="flex items-center gap-2 mb-4">
               <Banknote className="w-6 h-6 text-[#fbbf24]" />
@@ -133,7 +129,7 @@ export default function ClassementPage() {
           </div>
         </div>
       </section>
-      <section className="py-12">
+      <section className="valoria-page-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
             {/* Top Faction */}
@@ -142,7 +138,7 @@ export default function ClassementPage() {
                 <Crown className="w-6 h-6 text-[#f59e0b]" />
                 <h2 className="text-2xl font-semibold text-gray-900">Top Factions</h2>
               </div>
-              <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 overflow-hidden">
+              <div className="valoria-card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -188,7 +184,7 @@ export default function ClassementPage() {
                 <Target className="w-6 h-6 text-[#f59e0b]" />
                 <h2 className="text-2xl font-semibold text-gray-900">Top Kill</h2>
               </div>
-              <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 overflow-hidden">
+              <div className="valoria-card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -234,7 +230,7 @@ export default function ClassementPage() {
                 <Vote className="w-6 h-6 text-[#f59e0b]" />
                 <h2 className="text-2xl font-semibold text-gray-900">Top Vote</h2>
               </div>
-              <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 overflow-hidden">
+              <div className="valoria-card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -278,7 +274,7 @@ export default function ClassementPage() {
                 <Briefcase className="w-6 h-6 text-[#f59e0b]" />
                 <h2 className="text-2xl font-semibold text-gray-900">Top Métier (tout confondu)</h2>
               </div>
-              <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 overflow-hidden">
+              <div className="valoria-card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>

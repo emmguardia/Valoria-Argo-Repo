@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - master
       - dev
   pull_request:
     branches:
@@ -65,6 +64,13 @@ jobs:
 
       - name: Frontend – build
         run: cd Frontend && npm run build
+
+      - name: Trivy config scan (IaC: charts + argocd)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            ${{ env.TRIVY_IMAGE }} config --exit-code 1 --severity CRITICAL,HIGH \
+            /workspace/charts /workspace/argocd
 
   build-and-push:
     name: Build and push

@@ -36,31 +36,27 @@ const WIKI_SECTIONS = [
 
 export default function WikiPage() {
   return (
-    <div className="min-h-screen bg-[#fefce8]">
+    <div className="valoria-page-shell">
       <SEO
         title="Wiki"
         description="Wiki Valoria : Chroniques, Nations, Forge, Commerce, Failles, Familiers. Tout pour bien démarrer."
         keywords="wiki, Valoria, Minecraft, guide, Chroniques"
         url="/wiki"
       />
-      <section className="relative py-20 bg-gradient-to-b from-[#1e3a5f] to-[#152a45] border-b border-[#f59e0b]/20">
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="uppercase tracking-[0.35em] text-xs text-[#fbbf24]/90 font-medium">Wiki</p>
-          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl text-white mt-2">
-            Wiki Valoria
-          </h1>
-          <p className="text-white/80 max-w-2xl mt-4">
-            Tout ce que tu dois savoir pour bien démarrer sur le serveur.
-          </p>
+      <section className="valoria-page-hero">
+        <div className="valoria-page-container">
+          <p className="valoria-page-kicker">Wiki</p>
+          <h1 className="valoria-page-title">Wiki Valoria</h1>
+          <p className="valoria-page-subtitle">Tout ce que tu dois savoir pour bien démarrer sur le serveur.</p>
         </div>
       </section>
-      <section className="py-12">
+      <section className="valoria-page-section">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="space-y-8">
             {WIKI_SECTIONS.map((section) => (
               <article
                 key={section.title}
-                className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 p-8"
+                className="valoria-card p-8"
               >
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-[#1e3a5f]/10 rounded-xl shrink-0">
@@ -68,7 +64,7 @@ export default function WikiPage() {
                   </div>
                   <div>
                     <h2 className="font-display text-xl text-gray-900 mb-2">{section.title}</h2>
-                    <p className="text-gray-600 whitespace-pre-line">{section.content}</p>
+                    <p className="valoria-text-muted whitespace-pre-line">{section.content}</p>
                   </div>
                 </div>
               </article>
