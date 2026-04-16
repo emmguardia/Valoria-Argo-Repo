@@ -44,6 +44,41 @@ spec:
           value: {{ .Values.tebex.checkoutBaseUrl | quote }}
         - name: TEBEX_PACKAGE_IDS
           value: {{ toJson .Values.tebex.packageIds | quote }}
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: db-host
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: db-port
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: db-name
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: db-password
+        - name: JWT_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: jwt-private-key
+        - name: JWT_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: jwt-public-key
         - name: TEBEX_SECRET_KEY
           valueFrom:
             secretKeyRef:

@@ -7,7 +7,7 @@ import { useUser } from '../context/UserContext';
 export default function ConnexionPage() {
   const [isLogin, setIsLogin] = useState(true);
   const navigate = useNavigate();
-  const { isLoggedIn, ecus, login, logout } = useUser();
+  const { isLoggedIn, ecus, login, register, logout } = useUser();
 
   if (isLoggedIn) {
     return (
@@ -111,9 +111,15 @@ export default function ConnexionPage() {
                   e.preventDefault();
                   const form = e.currentTarget;
                   const emailInput = form.querySelector<HTMLInputElement>('#email');
+                  const passwordInput = form.querySelector<HTMLInputElement>('#password');
                   const pseudo = (emailInput?.value ?? '').trim();
-                  login(150, { email: pseudo.includes('@') ? pseudo : '', pseudo: pseudo.includes('@') ? '' : pseudo });
-                  navigate('/profile');
+
+                  const identifier = pseudo.includes('@') ? { email: pseudo } : { pseudo };
+                  const password = passwordInput?.value ?? '';
+
+                  void login({ identifier, password, rememberMe: false })
+                    .then(() => navigate('/profile'))
+                    .catch((err) => window.alert(err instanceof Error ? err.message : 'Erreur de connexion'));
                 }}
               >
                 <div>
@@ -159,11 +165,15 @@ export default function ConnexionPage() {
                   const form = e.currentTarget;
                   const pseudoInput = form.querySelector<HTMLInputElement>('#pseudo');
                   const emailInput = form.querySelector<HTMLInputElement>('#reg-email');
-                  login(150, {
-                    pseudo: pseudoInput?.value?.trim() ?? '',
-                    email: emailInput?.value?.trim() ?? '',
-                  });
-                  navigate('/profile');
+
+                  const passwordInput = form.querySelector<HTMLInputElement>('#reg-password');
+                  const pseudo = pseudoInput?.value?.trim() ?? '';
+                  const email = emailInput?.value?.trim() ?? '';
+                  const password = passwordInput?.value ?? '';
+
+                  void register({ pseudo, email, password })
+                    .then(() => navigate('/profile'))
+                    .catch((err) => window.alert(err instanceof Error ? err.message : 'Erreur inscription'));
                 }}
               >
                 <div>

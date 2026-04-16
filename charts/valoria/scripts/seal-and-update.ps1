@@ -36,11 +36,40 @@ try {
     $indentedBlock = ($encryptedYaml -split "`n" | ForEach-Object { "    $($_.TrimStart())" }) -join "`n"
     $replacement = "sealedSecret:`n  enabled: true`n  encryptedData:`n$indentedBlock"
 
-    $updated = [System.Text.RegularExpressions.Regex]::Replace(
-        $valuesContent,
-        '(?ms)sealedSecret:\s*\n\s*enabled:\s*(true|false)\s*\n\s*encryptedData:\s*\n(?:\s{4}.*\n)*',
-        $replacement + "`n"
-    )
+    # Mise a jour safe: remplacer uniquement les lignes apres `encryptedData:` dans `sealedSecret`,
+    # sans toucher au reste de la config Helm.
+    $sealedSecretIndex = $valuesContent.IndexOf('sealedSecret:', [System.StringComparison]::Ordinal)
+    if ($sealedSecretIndex -lt 0) {
+        throw "sealedSecret: introuvable dans values.yaml"
+    }
+
+    $encryptedDataKeyIndex = $valuesContent.IndexOf('encryptedData:', $sealedSecretIndex, [System.StringComparison]::Ordinal)
+    if ($encryptedDataKeyIndex -lt 0) {
+        throw "encryptedData: introuvable dans values.yaml"
+    }
+
+    $lineEnd = $valuesContent.IndexOf("`n", $encryptedDataKeyIndex, [System.StringComparison]::Ordinal)
+    if ($lineEnd -lt 0) {
+        throw "Fin de ligne introuvable apres encryptedData:"
+    }
+
+    $blockStart = $lineEnd + 1
+
+    $candidates = @('imagePullSecrets:', 'frontend:', 'backend:', 'nginx:', 'ingress:', 'tebex:')
+    $nextKeyIndex = [int]::MaxValue
+    foreach ($cand in $candidates) {
+        $idx = $valuesContent.IndexOf($cand, $blockStart, [System.StringComparison]::Ordinal)
+        if ($idx -ge 0 -and $idx -lt $nextKeyIndex) {
+            $nextKeyIndex = $idx
+        }
+    }
+    if ($nextKeyIndex -eq [int]::MaxValue) {
+        $nextKeyIndex = $valuesContent.Length
+    }
+
+    $prefix = $valuesContent.Substring(0, $blockStart)
+    $suffix = $valuesContent.Substring($nextKeyIndex)
+    $updated = $prefix + $indentedBlock + "`n" + $suffix
 
     if ($updated -eq $valuesContent) {
         throw "Bloc sealedSecret introuvable dans values.yaml."
