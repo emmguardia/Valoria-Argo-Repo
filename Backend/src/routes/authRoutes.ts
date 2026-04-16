@@ -8,6 +8,22 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const authRouter = Router();
 
+function formatUnknownError(err: unknown) {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message, code: (err as any).code };
+  }
+  if (typeof err === 'string') return { message: err };
+  if (typeof err === 'object' && err) {
+    const anyErr = err as any;
+    return {
+      name: anyErr.name,
+      message: anyErr.message,
+      code: anyErr.code,
+    };
+  }
+  return { message: 'Erreur serveur' };
+}
+
 function normalizePseudo(raw: string) {
   return raw.trim();
 }
@@ -112,8 +128,8 @@ authRouter.post('/register', async (req, res) => {
     });
   } catch (err) {
     console.error('[auth/register] error:', err);
-    const msg = err instanceof Error ? err.message : 'Erreur serveur';
-    return res.status(500).json({ error: msg });
+    const details = formatUnknownError(err);
+    return res.status(500).json({ error: 'Erreur serveur', details });
   }
 });
 
@@ -186,8 +202,8 @@ authRouter.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('[auth/login] error:', err);
-    const msg = err instanceof Error ? err.message : 'Erreur serveur';
-    return res.status(500).json({ error: msg });
+    const details = formatUnknownError(err);
+    return res.status(500).json({ error: 'Erreur serveur', details });
   }
 });
 
@@ -214,8 +230,8 @@ authRouter.get('/me', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('[auth/me GET] error:', err);
-    const msg = err instanceof Error ? err.message : 'Erreur serveur';
-    return res.status(500).json({ error: msg });
+    const details = formatUnknownError(err);
+    return res.status(500).json({ error: 'Erreur serveur', details });
   }
 });
 
@@ -288,8 +304,8 @@ authRouter.put('/me', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('[auth/me PUT] error:', err);
-    const msg = err instanceof Error ? err.message : 'Erreur serveur';
-    return res.status(500).json({ error: msg });
+    const details = formatUnknownError(err);
+    return res.status(500).json({ error: 'Erreur serveur', details });
   }
 });
 
@@ -303,8 +319,8 @@ authRouter.delete('/me', authenticateToken, async (req, res) => {
     return res.json({ message: 'Compte supprimé' });
   } catch (err) {
     console.error('[auth/me DELETE] error:', err);
-    const msg = err instanceof Error ? err.message : 'Erreur serveur';
-    return res.status(500).json({ error: msg });
+    const details = formatUnknownError(err);
+    return res.status(500).json({ error: 'Erreur serveur', details });
   }
 });
 
