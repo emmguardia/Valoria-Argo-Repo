@@ -54,7 +54,6 @@ ingress:
   enabled: true
   className: ""
   annotations:
-    argocd.argoproj.io/ignore-healthcheck: "true"
     kubernetes.io/ingress.class: traefik
   host: valoria.zenixweb.fr
   tls:

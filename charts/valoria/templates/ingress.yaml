@@ -6,8 +6,10 @@ metadata:
   namespace: {{ include "valoria.namespace" . }}
   labels:
     {{- include "valoria.labels" . | nindent 4 }}
-  {{- if .Values.ingress.annotations }}
   annotations:
+    # ArgoCD: ignore health check de l'Ingress (certains clusters ne remplissent jamais status.loadBalancer)
+    argocd.argoproj.io/ignore-healthcheck: "true"
+  {{- if .Values.ingress.annotations }}
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
   {{- end }}
 spec:
