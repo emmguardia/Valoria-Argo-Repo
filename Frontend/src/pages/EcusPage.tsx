@@ -20,12 +20,20 @@ export default function EcusPage() {
       navigate('/connexion');
       return;
     }
+
+    const username = profile?.pseudo?.trim();
+    if (!username) {
+      window.alert('Pseudo manquant. Reconnecte-toi.');
+      navigate('/connexion');
+      return;
+    }
+
     const response = await fetch('/api/tebex/checkout-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pack: ecus,
-        username: profile?.pseudo?.trim() || undefined,
+        username
       }),
     });
     if (!response.ok) {

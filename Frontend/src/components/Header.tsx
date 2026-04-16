@@ -1,6 +1,6 @@
 import { Coins, User, Menu, MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 
 const navLinks = [
@@ -18,7 +18,8 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
-  const { isLoggedIn, ecus } = useUser();
+  const navigate = useNavigate();
+  const { isLoggedIn, ecus, logout } = useUser();
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 10);
@@ -32,6 +33,12 @@ export default function Header() {
   const topTextClass = isSolid ? 'text-stone-600' : 'text-white drop-shadow';
   const topTextHoverClass = isSolid ? 'hover:text-stone-800 hover:bg-amber-50/80' : 'hover:text-white hover:bg-white/10';
   const topTextStrongClass = isSolid ? 'text-stone-800' : 'text-white drop-shadow';
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+    setIsMenuOpen(false);
+  };
 
   return (
     <header
@@ -86,6 +93,15 @@ export default function Header() {
               <User className="w-6 h-6" />
               <span className="hidden sm:inline">{isLoggedIn ? 'Profil' : 'Connexion'}</span>
             </Link>
+            {isLoggedIn && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className={`flex items-center gap-3 px-6 py-4 rounded-lg transition-all duration-300 text-lg sm:text-xl ${topTextClass} ${topTextHoverClass}`}
+              >
+                <span className="hidden sm:inline">Déconnexion</span>
+              </button>
+            )}
             <button
               className={`md:hidden p-5 rounded-lg ${topTextClass} ${topTextHoverClass}`}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -124,6 +140,15 @@ export default function Header() {
               <User className="w-5 h-5" />
               {isLoggedIn ? 'Profil' : 'Connexion'}
             </Link>
+            {isLoggedIn && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex items-center gap-3 py-5 px-6 text-stone-600 rounded-lg text-lg font-medium"
+              >
+                Déconnexion
+              </button>
+            )}
             <a
               href={DISCORD_URL}
               target="_blank"
