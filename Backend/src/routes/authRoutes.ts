@@ -111,7 +111,9 @@ authRouter.post('/register', async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Erreur serveur' });
+    console.error('[auth/register] error:', err);
+    const msg = err instanceof Error ? err.message : 'Erreur serveur';
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -183,7 +185,9 @@ authRouter.post('/login', async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Erreur serveur' });
+    console.error('[auth/login] error:', err);
+    const msg = err instanceof Error ? err.message : 'Erreur serveur';
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -208,8 +212,10 @@ authRouter.get('/me', authenticateToken, async (req, res) => {
       createdAt: user.created_at,
       lastLogin: user.last_login
     });
-  } catch {
-    return res.status(500).json({ error: 'Erreur serveur' });
+  } catch (err) {
+    console.error('[auth/me GET] error:', err);
+    const msg = err instanceof Error ? err.message : 'Erreur serveur';
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -280,8 +286,10 @@ authRouter.put('/me', authenticateToken, async (req, res) => {
       createdAt: user.created_at,
       lastLogin: user.last_login
     });
-  } catch {
-    return res.status(500).json({ error: 'Erreur serveur' });
+  } catch (err) {
+    console.error('[auth/me PUT] error:', err);
+    const msg = err instanceof Error ? err.message : 'Erreur serveur';
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -293,8 +301,10 @@ authRouter.delete('/me', authenticateToken, async (req, res) => {
     const db = await getDbPool();
     await db.execute('DELETE FROM users WHERE id = ?', [userId]);
     return res.json({ message: 'Compte supprimé' });
-  } catch {
-    return res.status(500).json({ error: 'Erreur serveur' });
+  } catch (err) {
+    console.error('[auth/me DELETE] error:', err);
+    const msg = err instanceof Error ? err.message : 'Erreur serveur';
+    return res.status(500).json({ error: msg });
   }
 });
 
