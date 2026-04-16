@@ -113,7 +113,13 @@ authRouter.post('/register', async (req, res) => {
     const token = jwt.sign(
       { userId: insertedId, pseudo, email },
       requireJwtPrivateKey(),
-      { algorithm: 'RS256', expiresIn: '7d', issuer: env.JWT_ISSUER }
+      (() => {
+        const options: jwt.SignOptions = { algorithm: 'RS256', expiresIn: '7d' };
+        if (typeof env.JWT_ISSUER === 'string' && env.JWT_ISSUER.trim().length > 0) {
+          options.issuer = env.JWT_ISSUER.trim();
+        }
+        return options;
+      })()
     );
 
     return res.status(201).json({
@@ -185,7 +191,16 @@ authRouter.post('/login', async (req, res) => {
     const token = jwt.sign(
       { userId: String(user.id), pseudo: user.pseudo, email: user.email },
       requireJwtPrivateKey(),
-      { algorithm: 'RS256', expiresIn: rememberMe ? '30d' : '1d', issuer: env.JWT_ISSUER }
+      (() => {
+        const options: jwt.SignOptions = {
+          algorithm: 'RS256',
+          expiresIn: rememberMe ? '30d' : '1d'
+        };
+        if (typeof env.JWT_ISSUER === 'string' && env.JWT_ISSUER.trim().length > 0) {
+          options.issuer = env.JWT_ISSUER.trim();
+        }
+        return options;
+      })()
     );
 
     return res.json({
