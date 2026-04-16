@@ -52,12 +52,13 @@ nginx:
 
 ingress:
   enabled: true
-  className: nginx
+  className: ""
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    argocd.argoproj.io/ignore-healthcheck: "true"
+    kubernetes.io/ingress.class: traefik
   host: valoria.zenixweb.fr
   tls:
-    enabled: true
+    enabled: false
     secretName: valoria-tls
 
 tebex:
