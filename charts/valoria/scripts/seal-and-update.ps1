@@ -7,6 +7,8 @@ $chartDir = Split-Path -Parent $PSScriptRoot
 $secretPath = Join-Path $chartDir "secrets\valoria-secrets.yaml"
 $valuesPath = Join-Path $chartDir "values.yaml"
 $tempPath = [System.IO.Path]::GetTempFileName() + ".yaml"
+$certProdPath = Join-Path $chartDir "secrets\sealed-secrets-cert-prod.pem"
+$certDefaultPath = Join-Path $chartDir "secrets\sealed-secrets-cert.pem"
 
 try {
     if (-not (Test-Path $secretPath)) {
@@ -19,7 +21,20 @@ try {
     Set-Content $tempPath -Value $content -Encoding UTF8
 
     Write-Host "2. Chiffrement avec kubeseal..."
-    $sealed = Get-Content $tempPath -Raw | kubeseal --format yaml --namespace valoria
+    $kubesealArgs = @("--format", "yaml", "--namespace", "valoria", "--name", "valoria-secrets", "--scope", "namespace-wide")
+    if (Test-Path $certProdPath) {
+        Write-Host "   -> Utilisation du certificat PROD: $certProdPath"
+        $kubesealArgs += @("--cert", $certProdPath)
+    }
+    elseif (Test-Path $certDefaultPath) {
+        Write-Host "   -> Utilisation du certificat local: $certDefaultPath"
+        $kubesealArgs += @("--cert", $certDefaultPath)
+    }
+    else {
+        Write-Host "   -> Aucun certificat local trouvé, kubeseal utilisera le cluster courant (kubectl context)."
+    }
+
+    $sealed = Get-Content $tempPath -Raw | kubeseal @kubesealArgs
     if ($LASTEXITCODE -ne 0) {
         throw "kubeseal a echoue. Verifie kubectl/kubeconfig."
     }
