@@ -51,11 +51,11 @@ backend:
 
 nginx:
   apiProxy:
-    enabled: false
+    enabled: true
     upstream: http://valoria-backend:3000
 
 ingress:
-  enabled: true
+  enabled: false
   className: ""
   annotations:
     kubernetes.io/ingress.class: traefik

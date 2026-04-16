@@ -132,7 +132,7 @@ export default function ConnexionPage() {
                       id="email"
                       type="text"
                       placeholder="ton@email.com ou pseudo"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent focus:text-gray-900 outline-none"
                     />
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export default function ConnexionPage() {
                       id="password"
                       type="password"
                       placeholder="••••••••"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent focus:text-gray-900 outline-none"
                     />
                   </div>
                 </div>
@@ -186,7 +186,7 @@ export default function ConnexionPage() {
                       id="pseudo"
                       type="text"
                       placeholder="TonPseudo"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent focus:text-gray-900 outline-none"
                     />
                   </div>
                 </div>
@@ -200,7 +200,7 @@ export default function ConnexionPage() {
                       id="reg-email"
                       type="email"
                       placeholder="ton@email.com"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent focus:text-gray-900 outline-none"
                     />
                   </div>
                 </div>
@@ -214,7 +214,7 @@ export default function ConnexionPage() {
                       id="reg-password"
                       type="password"
                       placeholder="••••••••"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent focus:text-gray-900 outline-none"
                     />
                   </div>
                 </div>
