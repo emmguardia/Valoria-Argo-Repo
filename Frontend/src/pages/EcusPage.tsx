@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Coins } from 'lucide-react';
+import { Coins, Loader2, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useUser } from '../context/UserContext';
 
@@ -17,6 +17,12 @@ export default function EcusPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasHandledCheckout = useRef(false);
   const { isLoggedIn, createEcusCheckout, confirmEcusCheckout } = useUser();
+  const [selectedPack, setSelectedPack] = useState<number | null>(null);
+  const [status, setStatus] = useState<{
+    tone: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+  } | null>(null);
 
   const handleBuyPack = async (ecus: number) => {
     if (!isLoggedIn) {
@@ -24,10 +30,22 @@ export default function EcusPage() {
       return;
     }
     try {
+      setSelectedPack(ecus);
+      setStatus({
+        tone: 'info',
+        title: 'Redirection vers le paiement sécurisé',
+        message: 'Tu vas être redirigé vers Stripe pour finaliser ton achat.',
+      });
       const checkoutUrl = await createEcusCheckout(ecus);
       window.location.assign(checkoutUrl);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Paiement indisponible');
+      setStatus({
+        tone: 'error',
+        title: 'Paiement indisponible',
+        message: err instanceof Error ? err.message : 'Une erreur est survenue.',
+      });
+    } finally {
+      setSelectedPack(null);
     }
   };
 
@@ -38,15 +56,33 @@ export default function EcusPage() {
     hasHandledCheckout.current = true;
 
     if (checkoutState === 'cancel') {
-      window.alert('Paiement annulé.');
+      setStatus({
+        tone: 'info',
+        title: 'Paiement annulé',
+        message: 'Aucun souci, ton compte n’a pas été débité.',
+      });
       setSearchParams({}, { replace: true });
       return;
     }
 
     if (checkoutState === 'success' && sessionId) {
       void confirmEcusCheckout(sessionId)
-        .then(() => window.alert('Paiement validé, Écus crédités.'))
-        .catch((err) => window.alert(err instanceof Error ? err.message : 'Paiement non validé'))
+        .then((result) => {
+          setStatus({
+            tone: 'success',
+            title: 'Merci pour ton achat !',
+            message: result.duplicated
+              ? `Ta commande était déjà validée. Solde actuel: ${result.ecus} Écus.`
+              : `${result.credited} Écus ont été ajoutés. Nouveau solde: ${result.ecus} Écus.`,
+          });
+        })
+        .catch((err) =>
+          setStatus({
+            tone: 'error',
+            title: 'Validation du paiement impossible',
+            message: err instanceof Error ? err.message : 'Paiement non validé.',
+          })
+        )
         .finally(() => setSearchParams({}, { replace: true }));
       return;
     }
@@ -75,6 +111,31 @@ export default function EcusPage() {
       </section>
       <section className="py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          {status && (
+            <div
+              className={`mb-8 rounded-2xl border px-5 py-4 ${
+                status.tone === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : status.tone === 'error'
+                  ? 'bg-rose-50 border-rose-200 text-rose-900'
+                  : 'bg-blue-50 border-blue-200 text-blue-900'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                {status.tone === 'success' ? (
+                  <CheckCircle2 className="w-5 h-5 mt-0.5" />
+                ) : status.tone === 'error' ? (
+                  <AlertCircle className="w-5 h-5 mt-0.5" />
+                ) : (
+                  <Sparkles className="w-5 h-5 mt-0.5" />
+                )}
+                <div>
+                  <p className="font-semibold">{status.title}</p>
+                  <p className="text-sm opacity-90 mt-1">{status.message}</p>
+                </div>
+              </div>
+            </div>
+          )}
           {!isLoggedIn && (
             <div className="mb-8 p-4 bg-amber-50 rounded-xl border border-amber-200/60">
               <p className="text-gray-700 text-sm">
@@ -87,12 +148,13 @@ export default function EcusPage() {
               <button
                 key={pack.ecus}
                 type="button"
+                disabled={selectedPack !== null}
                 onClick={() => handleBuyPack(pack.ecus)}
                 className={`relative p-8 rounded-2xl border-2 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
                   pack.popular
                     ? 'border-[#f59e0b] bg-amber-50/80 shadow-lg shadow-amber-500/10'
                     : 'border-gray-200 bg-white hover:border-[#1e3a5f]/40 hover:shadow-slate-900/5'
-                }`}
+                } ${selectedPack !== null ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 {pack.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#f59e0b] text-white text-xs font-bold rounded-full">
@@ -112,7 +174,10 @@ export default function EcusPage() {
                   </div>
                 </div>
                 <p className="text-2xl font-bold text-[#1e3a5f]">{pack.price}</p>
-                <p className="text-sm text-gray-500 mt-2">Paiement direct</p>
+                <p className="text-sm text-gray-500 mt-2 flex items-center gap-2">
+                  {selectedPack === pack.ecus ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {selectedPack === pack.ecus ? 'Préparation du paiement...' : 'Paiement direct'}
+                </p>
               </button>
             ))}
           </div>

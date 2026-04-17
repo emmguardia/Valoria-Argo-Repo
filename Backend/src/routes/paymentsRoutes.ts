@@ -155,8 +155,10 @@ paymentsRouter.post('/confirm-checkout-session', authenticateToken, async (req, 
       [session.id]
     );
     if (Array.isArray(existing) && existing.length > 0) {
+      const [rows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
+      const currentEcus = Array.isArray(rows) && rows.length > 0 ? Number((rows[0] as any).ecus ?? 0) : 0;
       await conn.rollback();
-      return res.status(200).json({ ok: true, duplicated: true });
+      return res.status(200).json({ ok: true, duplicated: true, ecus: currentEcus });
     }
 
     await conn.execute('UPDATE users SET ecus = ecus + ? WHERE id = ?', [ecus, userId]);
@@ -165,8 +167,10 @@ paymentsRouter.post('/confirm-checkout-session', authenticateToken, async (req, 
        VALUES (?, ?, ?, ?, ?)`,
       [session.id, userId, ecus, amountCents, currency]
     );
+    const [updatedRows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
+    const newEcus = Array.isArray(updatedRows) && updatedRows.length > 0 ? Number((updatedRows[0] as any).ecus ?? 0) : 0;
     await conn.commit();
-    return res.status(200).json({ ok: true, credited: ecus });
+    return res.status(200).json({ ok: true, credited: ecus, ecus: newEcus });
   } catch (error) {
     await conn.rollback();
     console.error('[payments/confirm-checkout-session] processing error:', error);

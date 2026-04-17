@@ -26,7 +26,8 @@ interface UserContextType {
   updateProfile: (data: Partial<UserProfile>) => void;
   deleteAccount: () => void;
   createEcusCheckout: (ecus: number) => Promise<string>;
-  confirmEcusCheckout: (sessionId: string) => Promise<void>;
+  confirmEcusCheckout: (sessionId: string) => Promise<{ credited: number; ecus: number; duplicated?: boolean }>;
+  refreshUserData: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | null>(null);
@@ -100,6 +101,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  const refreshUserData = useCallback(async () => {
+    if (!token) return;
+    const response = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Erreur lors du rafraîchissement du profil');
+    }
+    const newProfile = { pseudo: String(payload.pseudo || ''), email: String(payload.email || '') };
+    const newEcus = Number(payload.ecus ?? 0);
+    setProfile(newProfile);
+    setEcus(newEcus);
+    persist(true, token, newEcus, newProfile, purchaseHistory);
+  }, [token, persist, purchaseHistory]);
 
   const register = useCallback(
     async (data: { pseudo: string; email: string; password: string }) => {
@@ -292,30 +309,32 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok) {
         throw new Error(payload?.error || 'Impossible de valider le paiement');
       }
+      const nextEcus = Number(payload?.ecus);
+      if (Number.isFinite(nextEcus)) {
+        setEcus(nextEcus);
+        persist(true, token, nextEcus, profile, purchaseHistory);
+      } else {
+        await refreshUserData();
+      }
+      return {
+        credited: Number(payload?.credited ?? 0),
+        ecus: Number.isFinite(nextEcus) ? nextEcus : ecus,
+        duplicated: Boolean(payload?.duplicated),
+      };
     },
-    [token]
+    [token, persist, profile, purchaseHistory, refreshUserData, ecus]
   );
 
   useEffect(() => {
     if (!isLoggedIn || !token) return;
 
     // Sync depuis le backend (permet d'avoir le bon solde ECUS).
-    fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (r) => {
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload?.error || 'Erreur lors du chargement du profil');
-        const newProfile = { pseudo: String(payload.pseudo || ''), email: String(payload.email || '') };
-        const newEcus = Number(payload.ecus ?? 0);
-        setProfile(newProfile);
-        setEcus(newEcus);
-      })
+    refreshUserData()
       .catch(() => {
         // Token expiré ou invalide -> déconnecter
         logout();
       });
-  }, [isLoggedIn, token, logout]);
+  }, [isLoggedIn, token, logout, refreshUserData]);
 
   return (
     <UserContext.Provider
@@ -334,6 +353,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         deleteAccount,
         createEcusCheckout,
         confirmEcusCheckout,
+        refreshUserData,
       }}
     >
       {children}
