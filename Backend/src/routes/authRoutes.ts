@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db/mysql.js';
 import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authReadLimiter, authWriteLimiter } from '../middleware/rateLimitMiddleware.js';
 
 const authRouter = Router();
 
@@ -74,7 +75,7 @@ function requireJwtPrivateKey() {
   return env.JWT_PRIVATE_KEY;
 }
 
-authRouter.post('/register', async (req, res) => {
+authRouter.post('/register', authWriteLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Champs invalides' });
@@ -139,7 +140,7 @@ authRouter.post('/register', async (req, res) => {
   }
 });
 
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', authWriteLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Champs invalides' });
@@ -222,7 +223,7 @@ authRouter.post('/login', async (req, res) => {
   }
 });
 
-authRouter.get('/me', authenticateToken, async (req, res) => {
+authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).user?.userId as string | undefined;
     if (!userId) return res.status(401).json({ error: 'Token invalide' });
@@ -250,7 +251,7 @@ authRouter.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-authRouter.put('/me', authenticateToken, async (req, res) => {
+authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
   const parsed = z
     .object({
       pseudo: pseudoSchema.optional(),
@@ -324,7 +325,7 @@ authRouter.put('/me', authenticateToken, async (req, res) => {
   }
 });
 
-authRouter.delete('/me', authenticateToken, async (req, res) => {
+authRouter.delete('/me', authWriteLimiter, authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).user?.userId as string | undefined;
     if (!userId) return res.status(401).json({ error: 'Token invalide' });

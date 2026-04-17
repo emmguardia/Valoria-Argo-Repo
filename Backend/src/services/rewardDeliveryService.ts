@@ -23,7 +23,7 @@ function buildRewardCommand(mcUsername: string, rewardId: string) {
   if (!/^[a-zA-Z0-9_.-]{2,128}$/.test(rewardId)) {
     throw new Error('reward_id invalide');
   }
-  return `rewardslite give ${mcUsername} ${rewardId}`;
+  return `/give ${mcUsername} diamond 10`;
 }
 
 async function appendSalesLog(entry: Record<string, unknown>) {

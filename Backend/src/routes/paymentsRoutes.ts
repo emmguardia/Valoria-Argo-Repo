@@ -6,6 +6,7 @@ import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { getDbPool } from '../db/mysql.js';
 import { enqueueRewardDeliveryJob } from '../services/rewardDeliveryService.js';
+import { paymentsLimiter, webhookLimiter } from '../middleware/rateLimitMiddleware.js';
 
 export const paymentsRouter = Router();
 
@@ -46,7 +47,7 @@ function getFrontendUrl(req: Request) {
   return 'https://valoria.zenixweb.fr';
 }
 
-paymentsRouter.get('/status', (_req, res) => {
+paymentsRouter.get('/status', paymentsLimiter, (_req, res) => {
   const enabled = Boolean(env.STRIPE_SECRET_KEY);
 
   res.json({
@@ -56,7 +57,7 @@ paymentsRouter.get('/status', (_req, res) => {
   });
 });
 
-paymentsRouter.post('/create-checkout-session', authenticateToken, async (req, res) => {
+paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateToken, async (req, res) => {
   const parsed = ecusPackSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Pack Écus invalide' });
@@ -174,7 +175,7 @@ async function persistPaidSession(session: Stripe.Checkout.Session) {
   }
 }
 
-paymentsRouter.post('/confirm-checkout-session', authenticateToken, async (req, res) => {
+paymentsRouter.post('/confirm-checkout-session', paymentsLimiter, authenticateToken, async (req, res) => {
   const parsed = confirmCheckoutSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Session Stripe invalide' });
@@ -215,7 +216,7 @@ paymentsRouter.post('/confirm-checkout-session', authenticateToken, async (req, 
   }
 });
 
-paymentsRouter.post('/webhooks/stripe', async (req, res) => {
+paymentsRouter.post('/webhooks/stripe', webhookLimiter, async (req, res) => {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
     return res.status(204).send();
   }
