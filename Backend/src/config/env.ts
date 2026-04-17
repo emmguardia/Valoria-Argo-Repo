@@ -20,6 +20,8 @@ const envSchema = z.object({
   RCON_HOST: z.string().min(1).optional(),
   RCON_PORT: z.coerce.number().int().positive().optional(),
   RCON_PASSWORD: z.string().min(1).optional(),
+  /** Délai max (ms) pour connexion + réponses RCON (inventaire volumineux). Défaut rcon-client: 2000 — trop court. */
+  RCON_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   SALES_LOG_PATH: z.string().default('sales.log'),
   TRUST_PROXY: z.coerce.number().int().min(0).default(1)
 });

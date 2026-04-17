@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { env } from '../config/env.js';
 import { getDbPool } from '../db/mysql.js';
-import { sendRconCommand } from './rconService.js';
+import { withRcon } from './rconService.js';
 
 const RETRY_DELAY_MS = 30_000;
 const MAX_ATTEMPTS = 1000;
@@ -31,8 +31,12 @@ async function appendSalesLog(entry: Record<string, unknown>) {
   await fs.appendFile(env.SALES_LOG_PATH, line, 'utf8');
 }
 
+function stripMcFormatting(s: string) {
+  return s.replace(/\x1b\[[0-9;]*m/g, '').replace(/§[0-9a-fk-or]/gi, '');
+}
+
 function parseOnlinePlayers(listOutput: string): string[] {
-  const normalized = listOutput.trim();
+  const normalized = stripMcFormatting(listOutput).trim();
   const colonIndex = normalized.lastIndexOf(':');
   if (colonIndex < 0) return [];
   const playersPart = normalized.slice(colonIndex + 1).trim();
@@ -46,23 +50,28 @@ function parseScoreFromOutput(output: string): number {
   return Number(match[1]);
 }
 
-async function ensurePlayerCanReceiveReward(mcUsername: string) {
-  const listOutput = await sendRconCommand('minecraft:list');
+async function ensurePlayerCanReceiveReward(
+  send: (command: string) => Promise<string>,
+  mcUsername: string
+) {
+  const listOutput = await send('minecraft:list');
   const players = parseOnlinePlayers(listOutput);
   if (!players.includes(mcUsername)) {
+    const preview = stripMcFormatting(listOutput).slice(0, 400);
+    console.warn(`[reward-worker] ${mcUsername} absent de la liste (aperçu réponse): ${preview}`);
     throw new Error(`Joueur hors ligne: ${mcUsername}`);
   }
 
   try {
-    await sendRconCommand('scoreboard objectives add boutique dummy');
+    await send('scoreboard objectives add boutique dummy');
   } catch {
     // L'objectif existe déjà, on continue.
   }
 
-  await sendRconCommand(
+  await send(
     `execute store result score ${SCORE_CHECK_ID} boutique run data get entity ${mcUsername} Inventory`
   );
-  const scoreOutput = await sendRconCommand(`scoreboard players get ${SCORE_CHECK_ID} boutique`);
+  const scoreOutput = await send(`scoreboard players get ${SCORE_CHECK_ID} boutique`);
   const occupiedSlots = parseScoreFromOutput(scoreOutput);
   if (occupiedSlots >= INVENTORY_MAX_SLOTS) {
     throw new Error(`Inventaire plein pour ${mcUsername} (${occupiedSlots}/${INVENTORY_MAX_SLOTS})`);
@@ -109,8 +118,10 @@ export async function processPendingRewardJobs(limit = 20) {
     const command = buildRewardCommand(mcUsername, rewardId);
     await db.execute(`UPDATE reward_delivery_jobs SET status = 'processing' WHERE id = ?`, [id]);
     try {
-      await ensurePlayerCanReceiveReward(mcUsername);
-      const response = await sendRconCommand(command);
+      const response = await withRcon(async (send) => {
+        await ensurePlayerCanReceiveReward(send, mcUsername);
+        return send(command);
+      });
       await db.execute(
         `UPDATE reward_delivery_jobs
          SET status = 'completed', delivered_at = NOW(), last_error = NULL, updated_at = NOW()
