@@ -115,23 +115,33 @@ export default function EcusPage() {
             <div
               className={`mb-8 rounded-2xl border px-5 py-4 ${
                 status.tone === 'success'
-                  ? 'bg-green-100 border-green-500 text-green-900 shadow-sm shadow-green-200/70'
+                  ? 'shadow-sm'
                   : status.tone === 'error'
                   ? 'bg-rose-50 border-rose-200 text-rose-900'
                   : 'bg-blue-50 border-blue-200 text-blue-900'
               }`}
+              style={
+                status.tone === 'success'
+                  ? {
+                      backgroundColor: '#dcfce7',
+                      borderColor: '#16a34a',
+                      color: '#14532d',
+                      boxShadow: '0 1px 2px rgba(22, 163, 74, 0.2)',
+                    }
+                  : undefined
+              }
             >
               <div className="flex items-start gap-3">
                 {status.tone === 'success' ? (
-                  <CheckCircle2 className="w-5 h-5 mt-0.5" />
+                  <CheckCircle2 className="w-5 h-5 mt-0.5" style={{ color: '#16a34a' }} />
                 ) : status.tone === 'error' ? (
                   <AlertCircle className="w-5 h-5 mt-0.5" />
                 ) : (
                   <Sparkles className="w-5 h-5 mt-0.5" />
                 )}
                 <div>
-                  <p className="font-semibold">{status.title}</p>
-                  <p className="text-sm opacity-90 mt-1">{status.message}</p>
+                  <p className="font-semibold" style={status.tone === 'success' ? { color: '#14532d' } : undefined}>{status.title}</p>
+                  <p className="text-sm mt-1" style={status.tone === 'success' ? { color: '#166534' } : undefined}>{status.message}</p>
                 </div>
               </div>
             </div>
