@@ -16,7 +16,11 @@ const envSchema = z.object({
   JWT_ISSUER: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().min(10).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(10).optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().min(10).optional()
+  STRIPE_WEBHOOK_SECRET: z.string().min(10).optional(),
+  RCON_HOST: z.string().min(1).optional(),
+  RCON_PORT: z.coerce.number().int().positive().optional(),
+  RCON_PASSWORD: z.string().min(1).optional(),
+  SALES_LOG_PATH: z.string().default('sales.log')
 });
 
 const parsed = envSchema.safeParse(process.env);

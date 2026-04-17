@@ -87,6 +87,24 @@ spec:
               name: valoria-secrets
               key: stripe-publishable-key
               optional: true
+        - name: RCON_HOST
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: rcon-host
+              optional: true
+        - name: RCON_PORT
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: rcon-port
+              optional: true
+        - name: RCON_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: rcon-password
+              optional: true
         resources:
           {{- toYaml .Values.backend.resources | nindent 10 }}
         readinessProbe:

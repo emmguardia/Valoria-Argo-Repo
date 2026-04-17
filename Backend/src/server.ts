@@ -3,6 +3,7 @@ import express from 'express';
 import { env } from './config/env.js';
 import { authRouter } from './routes/authRoutes.js';
 import { paymentsRouter } from './routes/paymentsRoutes.js';
+import { startRewardDeliveryWorker } from './services/rewardDeliveryService.js';
 
 const app = express();
 
@@ -16,4 +17,5 @@ app.use('/api/payments', paymentsRouter);
 
 app.listen(env.PORT, () => {
   console.log(`Valoria backend listening on :${env.PORT}`);
+  startRewardDeliveryWorker();
 });

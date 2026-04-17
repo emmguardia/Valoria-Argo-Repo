@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { getDbPool } from '../db/mysql.js';
+import { enqueueRewardDeliveryJob } from '../services/rewardDeliveryService.js';
 
 export const paymentsRouter = Router();
 
@@ -21,6 +22,14 @@ const ECUS_PRICING_CENTS: Record<50 | 150 | 350 | 750 | 1650, number> = {
   350: 499,
   750: 999,
   1650: 1999
+};
+// Mapping sécurisé côté backend (ne vient jamais de la requête client).
+const ECUS_REWARD_IDS: Record<50 | 150 | 350 | 750 | 1650, string> = {
+  50: 'ecus_50',
+  150: 'ecus_150',
+  350: 'ecus_350',
+  750: 'ecus_750',
+  1650: 'ecus_1650'
 };
 const STRIPE_CURRENCY = 'eur';
 
@@ -62,9 +71,13 @@ paymentsRouter.post('/create-checkout-session', authenticateToken, async (req, r
   if (!user?.userId) {
     return res.status(401).json({ error: 'Token invalide' });
   }
+  if (!user.pseudo || !/^[a-zA-Z0-9_]{2,32}$/.test(user.pseudo)) {
+    return res.status(400).json({ error: 'Pseudo Minecraft invalide' });
+  }
 
   const { ecus } = parsed.data;
   const amount = ECUS_PRICING_CENTS[ecus];
+  const rewardId = ECUS_REWARD_IDS[ecus];
   const frontendUrl = getFrontendUrl(req);
   const successUrl = `${frontendUrl}/ecus?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${frontendUrl}/ecus?checkout=cancel`;
@@ -90,8 +103,9 @@ paymentsRouter.post('/create-checkout-session', authenticateToken, async (req, r
       ],
       metadata: {
         userId: user.userId,
-        pseudo: user.pseudo ?? '',
-        ecus: String(ecus)
+        mcUsername: user.pseudo,
+        ecus: String(ecus),
+        rewardId
       }
     });
 
@@ -105,6 +119,60 @@ paymentsRouter.post('/create-checkout-session', authenticateToken, async (req, r
     return res.status(500).json({ error: 'Erreur Stripe lors de la création de session' });
   }
 });
+
+async function persistPaidSession(session: Stripe.Checkout.Session) {
+  const userId = session.metadata?.userId;
+  const mcUsername = session.metadata?.mcUsername;
+  const rewardId = session.metadata?.rewardId;
+  const ecusRaw = session.metadata?.ecus;
+  const ecus = Number(ecusRaw);
+  const amountCents = typeof session.amount_total === 'number' ? session.amount_total : 0;
+  const currency = session.currency || STRIPE_CURRENCY;
+
+  if (!session.id || !userId || !mcUsername || !rewardId || !Number.isInteger(ecus) || ecus <= 0) {
+    throw new Error('Métadonnées Stripe invalides');
+  }
+
+  const db = await getDbPool();
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [existing] = await conn.execute(
+      'SELECT id FROM stripe_ecus_payments WHERE stripe_session_id = ? LIMIT 1',
+      [session.id]
+    );
+    if (Array.isArray(existing) && existing.length > 0) {
+      const [rows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
+      const currentEcus = Array.isArray(rows) && rows.length > 0 ? Number((rows[0] as any).ecus ?? 0) : 0;
+      await conn.rollback();
+      return { duplicated: true, credited: 0, ecus: currentEcus };
+    }
+
+    await conn.execute('UPDATE users SET ecus = ecus + ? WHERE id = ?', [ecus, userId]);
+    await conn.execute(
+      `INSERT INTO stripe_ecus_payments (stripe_session_id, user_id, mc_username, reward_id, ecus_amount, amount_cents, currency)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [session.id, userId, mcUsername, rewardId, ecus, amountCents, currency]
+    );
+    const [updatedRows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
+    const newEcus = Array.isArray(updatedRows) && updatedRows.length > 0 ? Number((updatedRows[0] as any).ecus ?? 0) : 0;
+    await conn.commit();
+
+    await enqueueRewardDeliveryJob({
+      stripeSessionId: session.id,
+      userId: String(userId),
+      mcUsername: String(mcUsername),
+      rewardId: String(rewardId),
+    });
+
+    return { duplicated: false, credited: ecus, ecus: newEcus };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
 
 paymentsRouter.post('/confirm-checkout-session', authenticateToken, async (req, res) => {
   const parsed = confirmCheckoutSchema.safeParse(req.body);
@@ -131,52 +199,19 @@ paymentsRouter.post('/confirm-checkout-session', authenticateToken, async (req, 
   }
 
   const userId = session.metadata?.userId;
-  const ecusRaw = session.metadata?.ecus;
-  const ecus = Number(ecusRaw);
-  const amountCents = typeof session.amount_total === 'number' ? session.amount_total : 0;
-  const currency = session.currency || STRIPE_CURRENCY;
-
-  if (!session.id || !userId || !Number.isInteger(ecus) || ecus <= 0) {
-    return res.status(400).json({ error: 'Métadonnées Stripe invalides' });
-  }
-  if (String(userId) !== String(user.userId)) {
+  if (!userId || String(userId) !== String(user.userId)) {
     return res.status(403).json({ error: 'Session Stripe non autorisée' });
   }
   if (session.payment_status !== 'paid') {
     return res.status(409).json({ error: 'Paiement non validé' });
   }
 
-  const db = await getDbPool();
-  const conn = await db.getConnection();
   try {
-    await conn.beginTransaction();
-    const [existing] = await conn.execute(
-      'SELECT id FROM stripe_ecus_payments WHERE stripe_session_id = ? LIMIT 1',
-      [session.id]
-    );
-    if (Array.isArray(existing) && existing.length > 0) {
-      const [rows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
-      const currentEcus = Array.isArray(rows) && rows.length > 0 ? Number((rows[0] as any).ecus ?? 0) : 0;
-      await conn.rollback();
-      return res.status(200).json({ ok: true, duplicated: true, ecus: currentEcus });
-    }
-
-    await conn.execute('UPDATE users SET ecus = ecus + ? WHERE id = ?', [ecus, userId]);
-    await conn.execute(
-      `INSERT INTO stripe_ecus_payments (stripe_session_id, user_id, ecus_amount, amount_cents, currency)
-       VALUES (?, ?, ?, ?, ?)`,
-      [session.id, userId, ecus, amountCents, currency]
-    );
-    const [updatedRows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
-    const newEcus = Array.isArray(updatedRows) && updatedRows.length > 0 ? Number((updatedRows[0] as any).ecus ?? 0) : 0;
-    await conn.commit();
-    return res.status(200).json({ ok: true, credited: ecus, ecus: newEcus });
+    const result = await persistPaidSession(session);
+    return res.status(200).json({ ok: true, ...result });
   } catch (error) {
-    await conn.rollback();
     console.error('[payments/confirm-checkout-session] processing error:', error);
     return res.status(500).json({ error: 'Erreur serveur validation paiement' });
-  } finally {
-    conn.release();
   }
 });
 
@@ -204,45 +239,11 @@ paymentsRouter.post('/webhooks/stripe', async (req, res) => {
   }
 
   const session = event.data.object as Stripe.Checkout.Session;
-  const userId = session.metadata?.userId;
-  const ecusRaw = session.metadata?.ecus;
-  const ecus = Number(ecusRaw);
-  const amountCents = typeof session.amount_total === 'number' ? session.amount_total : 0;
-  const currency = session.currency || STRIPE_CURRENCY;
-
-  if (!session.id || !userId || !Number.isInteger(ecus) || ecus <= 0) {
-    return res.status(400).json({ error: 'Métadonnées Stripe invalides' });
-  }
-
-  const db = await getDbPool();
-  const conn = await db.getConnection();
   try {
-    await conn.beginTransaction();
-
-    const [existing] = await conn.execute(
-      'SELECT id FROM stripe_ecus_payments WHERE stripe_session_id = ? LIMIT 1',
-      [session.id]
-    );
-
-    if (Array.isArray(existing) && existing.length > 0) {
-      await conn.rollback();
-      return res.status(200).json({ ok: true, duplicated: true });
-    }
-
-    await conn.execute('UPDATE users SET ecus = ecus + ? WHERE id = ?', [ecus, userId]);
-    await conn.execute(
-      `INSERT INTO stripe_ecus_payments (stripe_session_id, user_id, ecus_amount, amount_cents, currency)
-       VALUES (?, ?, ?, ?, ?)`,
-      [session.id, userId, ecus, amountCents, currency]
-    );
-
-    await conn.commit();
+    await persistPaidSession(session);
     return res.status(200).json({ ok: true });
   } catch (error) {
-    await conn.rollback();
     console.error('[payments/stripe-webhook] processing error:', error);
     return res.status(500).json({ error: 'Erreur serveur webhook Stripe' });
-  } finally {
-    conn.release();
   }
 });
