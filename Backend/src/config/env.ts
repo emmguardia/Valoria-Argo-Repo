@@ -14,12 +14,9 @@ const envSchema = z.object({
   JWT_PRIVATE_KEY: z.string().min(10).optional(),
   JWT_PUBLIC_KEY: z.string().min(10).optional(),
   JWT_ISSUER: z.string().optional(),
-  TEBEX_SECRET_KEY: z.string().min(10),
-  TEBEX_PUBLIC_TOKEN: z.string().min(10),
-  TEBEX_PROJECT_ID: z.string().min(1),
-  TEBEX_WEBHOOK_SECRET: z.string().min(10),
-  TEBEX_CHECKOUT_BASE_URL: z.string().url().default('https://checkout.tebex.io/package/'),
-  TEBEX_PACKAGE_IDS: z.string().default('{}')
+  STRIPE_SECRET_KEY: z.string().min(10).optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().min(10).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(10).optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

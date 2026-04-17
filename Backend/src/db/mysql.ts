@@ -43,5 +43,20 @@ async function initSchema(db: Pool) {
       UNIQUE KEY uniq_users_email (email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS stripe_ecus_payments (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      stripe_session_id VARCHAR(255) NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      ecus_amount INT NOT NULL,
+      amount_cents INT NOT NULL,
+      currency VARCHAR(16) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_stripe_session_id (stripe_session_id),
+      KEY idx_stripe_user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 }
 

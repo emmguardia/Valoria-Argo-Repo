@@ -40,10 +40,6 @@ spec:
           value: {{ .Values.backend.port | quote }}
         - name: NODE_ENV
           value: "production"
-        - name: TEBEX_CHECKOUT_BASE_URL
-          value: {{ .Values.tebex.checkoutBaseUrl | quote }}
-        - name: TEBEX_PACKAGE_IDS
-          value: {{ toJson .Values.tebex.packageIds | quote }}
         - name: DB_HOST
           valueFrom:
             secretKeyRef:
@@ -79,26 +75,18 @@ spec:
             secretKeyRef:
               name: valoria-secrets
               key: jwt-public-key
-        - name: TEBEX_SECRET_KEY
+        - name: STRIPE_SECRET_KEY
           valueFrom:
             secretKeyRef:
               name: valoria-secrets
-              key: tebex-secret-key
-        - name: TEBEX_PUBLIC_TOKEN
+              key: stripe-secret-key
+              optional: true
+        - name: STRIPE_PUBLISHABLE_KEY
           valueFrom:
             secretKeyRef:
               name: valoria-secrets
-              key: tebex-public-token
-        - name: TEBEX_PROJECT_ID
-          valueFrom:
-            secretKeyRef:
-              name: valoria-secrets
-              key: tebex-project-id
-        - name: TEBEX_WEBHOOK_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: valoria-secrets
-              key: tebex-secret-key
+              key: stripe-publishable-key
+              optional: true
         resources:
           {{- toYaml .Values.backend.resources | nindent 10 }}
         readinessProbe:

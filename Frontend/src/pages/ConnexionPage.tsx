@@ -172,7 +172,7 @@ export default function ConnexionPage() {
                   const password = passwordInput?.value ?? '';
 
                   void register({ pseudo, email, password })
-                    .then(() => navigate('/profile'))
+                    .then(() => navigate('/boutique'))
                     .catch((err) => window.alert(err instanceof Error ? err.message : 'Erreur inscription'));
                 }}
               >

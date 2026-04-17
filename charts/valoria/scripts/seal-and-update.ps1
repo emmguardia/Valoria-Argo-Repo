@@ -49,7 +49,6 @@ try {
     Write-Host "4. Mise a jour de values.yaml..."
     $valuesContent = Get-Content $valuesPath -Raw
     $indentedBlock = ($encryptedYaml -split "`n" | ForEach-Object { "    $($_.TrimStart())" }) -join "`n"
-    $replacement = "sealedSecret:`n  enabled: true`n  encryptedData:`n$indentedBlock"
 
     # Mise a jour safe: remplacer uniquement les lignes apres `encryptedData:` dans `sealedSecret`,
     # sans toucher au reste de la config Helm.
@@ -70,7 +69,7 @@ try {
 
     $blockStart = $lineEnd + 1
 
-    $candidates = @('imagePullSecrets:', 'frontend:', 'backend:', 'nginx:', 'ingress:', 'tebex:')
+    $candidates = @('imagePullSecrets:', 'frontend:', 'backend:', 'nginx:', 'ingress:')
     $nextKeyIndex = [int]::MaxValue
     foreach ($cand in $candidates) {
         $idx = $valuesContent.IndexOf($cand, $blockStart, [System.StringComparison]::Ordinal)

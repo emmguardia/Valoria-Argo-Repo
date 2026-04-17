@@ -1,4 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Coins } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useUser } from '../context/UserContext';
@@ -13,40 +14,45 @@ const ECUS_PACKS = [
 
 export default function EcusPage() {
   const navigate = useNavigate();
-  const { isLoggedIn, profile } = useUser();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const hasHandledCheckout = useRef(false);
+  const { isLoggedIn, createEcusCheckout, confirmEcusCheckout } = useUser();
 
   const handleBuyPack = async (ecus: number) => {
     if (!isLoggedIn) {
       navigate('/connexion');
       return;
     }
-
-    const username = profile?.pseudo?.trim();
-    if (!username) {
-      window.alert('Pseudo manquant. Reconnecte-toi.');
-      navigate('/connexion');
-      return;
+    try {
+      const checkoutUrl = await createEcusCheckout(ecus);
+      window.location.assign(checkoutUrl);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Paiement indisponible');
     }
-
-    const response = await fetch('/api/tebex/checkout-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pack: ecus,
-        username
-      }),
-    });
-    if (!response.ok) {
-      window.alert("Le paiement Tebex n'est pas disponible pour ce pack pour le moment.");
-      return;
-    }
-    const data = (await response.json()) as { url?: string };
-    if (!data.url) {
-      window.alert('Réponse Tebex invalide.');
-      return;
-    }
-    window.location.assign(data.url);
   };
+
+  useEffect(() => {
+    const checkoutState = searchParams.get('checkout');
+    const sessionId = searchParams.get('session_id');
+    if (!checkoutState || hasHandledCheckout.current) return;
+    hasHandledCheckout.current = true;
+
+    if (checkoutState === 'cancel') {
+      window.alert('Paiement annulé.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    if (checkoutState === 'success' && sessionId) {
+      void confirmEcusCheckout(sessionId)
+        .then(() => window.alert('Paiement validé, Écus crédités.'))
+        .catch((err) => window.alert(err instanceof Error ? err.message : 'Paiement non validé'))
+        .finally(() => setSearchParams({}, { replace: true }));
+      return;
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [confirmEcusCheckout, searchParams, setSearchParams]);
 
   return (
     <div className="min-h-screen bg-[#fefce8]">
@@ -111,7 +117,7 @@ export default function EcusPage() {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-gray-500">
-            Paiement géré par Tebex via backend sécurisé.
+            Paiement sécurisé via Stripe.
           </p>
           <div className="mt-8 text-center">
             <Link to="/boutique" className="text-[#1e3a5f] font-semibold hover:underline">

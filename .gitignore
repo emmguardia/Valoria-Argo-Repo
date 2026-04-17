@@ -12,7 +12,6 @@ charts/valoria/secrets/valoria-secrets.yaml
 charts/valoria/secrets/sealed-secrets-cert.pem
 charts/valoria/secrets/sealed-secrets-cert-prod.pem
 charts/valoria/secrets/*.pem
-charts/valoria/secrets/valoria-sealed.yaml
 
 # Env files
 .env

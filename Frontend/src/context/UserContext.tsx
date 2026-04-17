@@ -25,6 +25,8 @@ interface UserContextType {
   addPurchase: (record: PurchaseRecord) => void;
   updateProfile: (data: Partial<UserProfile>) => void;
   deleteAccount: () => void;
+  createEcusCheckout: (ecus: number) => Promise<string>;
+  confirmEcusCheckout: (sessionId: string) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | null>(null);
@@ -248,6 +250,52 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     logout();
   }, [logout, token]);
 
+  const createEcusCheckout = useCallback(
+    async (ecusAmount: number) => {
+      if (!token) throw new Error('Connecte-toi pour acheter des Écus');
+
+      const response = await fetch('/api/payments/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ecus: ecusAmount }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Erreur lors de la création du paiement');
+      }
+      if (!payload?.url) {
+        throw new Error('URL de paiement introuvable');
+      }
+
+      return String(payload.url);
+    },
+    [token]
+  );
+
+  const confirmEcusCheckout = useCallback(
+    async (sessionId: string) => {
+      if (!token) throw new Error('Connecte-toi pour valider le paiement');
+      const response = await fetch('/api/payments/confirm-checkout-session', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Impossible de valider le paiement');
+      }
+    },
+    [token]
+  );
+
   useEffect(() => {
     if (!isLoggedIn || !token) return;
 
@@ -284,6 +332,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         addPurchase,
         updateProfile,
         deleteAccount,
+        createEcusCheckout,
+        confirmEcusCheckout,
       }}
     >
       {children}
