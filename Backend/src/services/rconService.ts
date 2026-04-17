@@ -1,4 +1,5 @@
 import { Rcon } from 'rcon-client';
+import { createHash } from 'node:crypto';
 import { env } from '../config/env.js';
 
 function requireRconConfig() {
@@ -6,9 +7,21 @@ function requireRconConfig() {
     throw new Error('RCON non configuré (RCON_HOST/RCON_PORT/RCON_PASSWORD)');
   }
   return {
-    host: env.RCON_HOST,
+    host: env.RCON_HOST.trim(),
     port: env.RCON_PORT,
-    password: env.RCON_PASSWORD,
+    password: env.RCON_PASSWORD.trim(),
+  };
+}
+
+export function getRconRuntimeFingerprint() {
+  if (!env.RCON_PASSWORD) return { configured: false };
+  const pwd = env.RCON_PASSWORD.trim();
+  return {
+    configured: true,
+    host: (env.RCON_HOST || '').trim(),
+    port: env.RCON_PORT,
+    passwordLength: pwd.length,
+    passwordSha256_12: createHash('sha256').update(pwd).digest('hex').slice(0, 12),
   };
 }
 
