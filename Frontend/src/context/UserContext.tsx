@@ -328,13 +328,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isLoggedIn || !token) return;
 
+    let cancelled = false;
     // Sync depuis le backend (permet d'avoir le bon solde ECUS).
-    refreshUserData()
+    void fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload?.error || 'Erreur lors du chargement du profil');
+        if (cancelled) return;
+        const newProfile = { pseudo: String(payload.pseudo || ''), email: String(payload.email || '') };
+        const newEcus = Number(payload.ecus ?? 0);
+        setProfile(newProfile);
+        setEcus(newEcus);
+        persist(true, token, newEcus, newProfile, purchaseHistory);
+      })
       .catch(() => {
+        if (cancelled) return;
         // Token expiré ou invalide -> déconnecter
         logout();
       });
-  }, [isLoggedIn, token, logout, refreshUserData]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, token, logout, persist, purchaseHistory]);
 
   return (
     <UserContext.Provider
