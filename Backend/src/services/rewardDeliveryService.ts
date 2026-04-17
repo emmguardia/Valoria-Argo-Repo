@@ -126,14 +126,16 @@ export async function processPendingRewardJobs(limit = 20) {
       });
     } catch (error) {
       const nextAttempts = attempts + 1;
-      const nextAt = new Date(Date.now() + RETRY_DELAY_MS);
-      const status = nextAttempts >= MAX_ATTEMPTS ? 'dead' : 'failed';
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isAuthFailure = /authentication failed/i.test(errorMessage);
+      const nextAt = new Date(Date.now() + (isAuthFailure ? 10 * 60 * 1000 : RETRY_DELAY_MS));
+      const status = isAuthFailure || nextAttempts >= MAX_ATTEMPTS ? 'dead' : 'failed';
       console.error(`[reward-worker] job ${id} failed (attempt ${nextAttempts}):`, error);
       await db.execute(
         `UPDATE reward_delivery_jobs
          SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = NOW()
          WHERE id = ?`,
-        [status, nextAttempts, error instanceof Error ? error.message : String(error), nextAt, id]
+        [status, nextAttempts, errorMessage, nextAt, id]
       );
     }
   }
