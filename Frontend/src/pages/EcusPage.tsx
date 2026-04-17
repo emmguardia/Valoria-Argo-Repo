@@ -115,7 +115,7 @@ export default function EcusPage() {
             <div
               className={`mb-8 rounded-2xl border px-5 py-4 ${
                 status.tone === 'success'
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  ? 'bg-green-100 border-green-500 text-green-900 shadow-sm shadow-green-200/70'
                   : status.tone === 'error'
                   ? 'bg-rose-50 border-rose-200 text-rose-900'
                   : 'bg-blue-50 border-blue-200 text-blue-900'
