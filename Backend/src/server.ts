@@ -6,6 +6,7 @@ import { paymentsRouter } from './routes/paymentsRoutes.js';
 import { startRewardDeliveryWorker } from './services/rewardDeliveryService.js';
 
 const app = express();
+app.set('trust proxy', env.TRUST_PROXY);
 
 app.use(cors());
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));

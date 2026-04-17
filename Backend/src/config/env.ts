@@ -20,7 +20,8 @@ const envSchema = z.object({
   RCON_HOST: z.string().min(1).optional(),
   RCON_PORT: z.coerce.number().int().positive().optional(),
   RCON_PASSWORD: z.string().min(1).optional(),
-  SALES_LOG_PATH: z.string().default('sales.log')
+  SALES_LOG_PATH: z.string().default('sales.log'),
+  TRUST_PROXY: z.coerce.number().int().min(0).default(1)
 });
 
 const parsed = envSchema.safeParse(process.env);

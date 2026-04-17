@@ -23,7 +23,7 @@ function buildRewardCommand(mcUsername: string, rewardId: string) {
   if (!/^[a-zA-Z0-9_.-]{2,128}$/.test(rewardId)) {
     throw new Error('reward_id invalide');
   }
-  return `/give ${mcUsername} diamond 10`;
+  return `give ${mcUsername} diamond 10`;
 }
 
 async function appendSalesLog(entry: Record<string, unknown>) {
@@ -51,6 +51,12 @@ async function ensurePlayerCanReceiveReward(mcUsername: string) {
   const players = parseOnlinePlayers(listOutput);
   if (!players.includes(mcUsername)) {
     throw new Error(`Joueur hors ligne: ${mcUsername}`);
+  }
+
+  try {
+    await sendRconCommand('scoreboard objectives add boutique dummy');
+  } catch {
+    // L'objectif existe déjà, on continue.
   }
 
   await sendRconCommand(
@@ -122,6 +128,7 @@ export async function processPendingRewardJobs(limit = 20) {
       const nextAttempts = attempts + 1;
       const nextAt = new Date(Date.now() + RETRY_DELAY_MS);
       const status = nextAttempts >= MAX_ATTEMPTS ? 'dead' : 'failed';
+      console.error(`[reward-worker] job ${id} failed (attempt ${nextAttempts}):`, error);
       await db.execute(
         `UPDATE reward_delivery_jobs
          SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = NOW()
