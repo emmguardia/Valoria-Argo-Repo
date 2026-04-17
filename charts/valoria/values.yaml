@@ -1,5 +1,5 @@
 ﻿namespace: valoria
-
+ 
 sealedSecret:
   enabled: true
   encryptedData:
@@ -65,3 +65,4 @@ ingress:
   tls:
     enabled: false
     secretName: valoria-tls
+

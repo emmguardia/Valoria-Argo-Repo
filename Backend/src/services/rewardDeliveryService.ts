@@ -104,8 +104,9 @@ export async function processPendingRewardJobs(limit = 20) {
   for (const raw of rows as any[]) {
     const id = Number(raw.id);
     const attempts = Number(raw.attempts ?? 0);
-    const command = String(raw.command_text ?? '');
     const mcUsername = String(raw.mc_username ?? '');
+    const rewardId = String(raw.reward_id ?? '');
+    const command = buildRewardCommand(mcUsername, rewardId);
     await db.execute(`UPDATE reward_delivery_jobs SET status = 'processing' WHERE id = ?`, [id]);
     try {
       await ensurePlayerCanReceiveReward(mcUsername);
