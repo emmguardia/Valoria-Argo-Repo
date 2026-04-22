@@ -1,10 +1,10 @@
 import { getDbPool } from '../db/mysql.js';
 import { withRcon } from './rconService.js';
 
-const RETRY_DELAY_MS = 30_000;
-const MAX_ATTEMPTS = 1000;
 const INVENTORY_MAX_SLOTS = 36;
 const SCORE_CHECK_ID = '%check%';
+const MAX_DAILY_CLAIMS = 3;
+const CLAIM_COOLDOWN_MS = 10_000;
 
 function sanitizeMcUsername(value: string) {
   return value.trim();
@@ -21,6 +21,7 @@ function buildRewardCommand(mcUsername: string, rewardId: string) {
   if (!/^[a-zA-Z0-9_.-]{2,128}$/.test(rewardId)) {
     throw new Error('reward_id invalide');
   }
+  // Placeholder : à remplacer par une table de mapping reward_id → commande quand on ajoutera des items réels.
   return `give ${mcUsername} diamond 10`;
 }
 
@@ -51,10 +52,10 @@ function parseScoreFromOutput(output: string): number {
   return Number(match[1]);
 }
 
-class PlayerOfflineError extends Error {
+export class PlayerOfflineError extends Error {
   constructor(user: string) { super(`player_offline:${user}`); }
 }
-class InventoryFullError extends Error {
+export class InventoryFullError extends Error {
   constructor(user: string, slots: number) { super(`inventory_full:${user}:${slots}/${INVENTORY_MAX_SLOTS}`); }
 }
 
@@ -96,91 +97,149 @@ export async function enqueueRewardDeliveryJob(input: {
   const command = buildRewardCommand(mcUsername, rewardId);
   await db.execute(
     `INSERT INTO reward_delivery_jobs
-      (stripe_session_id, user_id, mc_username, reward_id, command_text, status, attempts, next_attempt_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', 0, NOW())
+      (stripe_session_id, user_id, mc_username, reward_id, command_text, status, attempts, next_attempt_at, requires_manual_claim)
+     VALUES (?, ?, ?, ?, ?, 'pending_claim', 0, NOW(), 1)
      ON DUPLICATE KEY UPDATE updated_at = NOW()`,
     [input.stripeSessionId, input.userId, mcUsername, rewardId, command]
   );
 }
 
-export async function processPendingRewardJobs(limit = 20) {
+export async function listPendingRewardsForUser(userId: string) {
   const db = await getDbPool();
   const [rows] = await db.execute(
-    `SELECT id, stripe_session_id, user_id, mc_username, reward_id, command_text, attempts
+    `SELECT id, reward_id, mc_username, daily_attempts, daily_attempts_reset_at, last_error, created_at, updated_at
      FROM reward_delivery_jobs
-     WHERE status IN ('pending', 'failed') AND next_attempt_at <= NOW()
-     ORDER BY next_attempt_at ASC
-     LIMIT ?`,
-    [limit]
+     WHERE user_id = ? AND status = 'pending_claim'
+     ORDER BY created_at DESC`,
+    [userId]
   );
-
-  if (!Array.isArray(rows) || rows.length === 0) return;
-
-  for (const raw of rows as any[]) {
-    const id = Number(raw.id);
-    const attempts = Number(raw.attempts ?? 0);
-    const mcUsername = String(raw.mc_username ?? '');
-    const rewardId = String(raw.reward_id ?? '');
-    const command = buildRewardCommand(mcUsername, rewardId);
-    await db.execute(`UPDATE reward_delivery_jobs SET status = 'processing' WHERE id = ?`, [id]);
-    try {
-      const response = await withRcon(async (send) => {
-        await ensurePlayerCanReceiveReward(send, mcUsername);
-        return send(command);
-      });
-      await db.execute(
-        `UPDATE reward_delivery_jobs
-         SET status = 'completed', delivered_at = NOW(), last_error = NULL, updated_at = NOW()
-         WHERE id = ?`,
-        [id]
-      );
-      console.log(`[worker] job=${id} user=${mcUsername} reward=${rewardId} → delivered`);
-      logSale({
-        type: 'reward_delivered',
-        stripeSessionId: String(raw.stripe_session_id),
-        userId: String(raw.user_id),
-        mcUsername,
-        rewardId,
-        rconResponse: response,
-      });
-    } catch (error) {
-      const nextAttempts = attempts + 1;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const isAuthFailure = /authentication failed/i.test(errorMessage);
-      const isOffline = error instanceof PlayerOfflineError;
-      const isInvFull = error instanceof InventoryFullError;
-      const retryMs = isAuthFailure ? 10 * 60 * 1000 : RETRY_DELAY_MS;
-      const nextAt = new Date(Date.now() + retryMs);
-      const status = isAuthFailure || nextAttempts >= MAX_ATTEMPTS ? 'dead' : 'failed';
-
-      if (isOffline) {
-        console.log(`[worker] job=${id} user=${mcUsername} → offline (retry ${retryMs / 1000}s)`);
-      } else if (isInvFull) {
-        console.log(`[worker] job=${id} user=${mcUsername} → inventory_full (retry ${retryMs / 1000}s)`);
-      } else if (status === 'dead') {
-        console.error(`[worker] job=${id} user=${mcUsername} → dead: ${errorMessage}`);
-      } else {
-        console.error(`[worker] job=${id} user=${mcUsername} → error: ${errorMessage} (retry ${retryMs / 1000}s)`);
-      }
-
-      await db.execute(
-        `UPDATE reward_delivery_jobs
-         SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = NOW()
-         WHERE id = ?`,
-        [status, nextAttempts, errorMessage, nextAt, id]
-      );
-    }
-  }
+  if (!Array.isArray(rows)) return [];
+  return (rows as any[]).map((r) => {
+    const dailyAttempts = Number(r.daily_attempts ?? 0);
+    const resetAt = r.daily_attempts_reset_at ? new Date(r.daily_attempts_reset_at) : null;
+    const now = new Date();
+    const windowExpired = !resetAt || resetAt <= now;
+    const effectiveAttempts = windowExpired ? 0 : dailyAttempts;
+    return {
+      id: Number(r.id),
+      rewardId: String(r.reward_id),
+      mcUsername: String(r.mc_username),
+      attemptsRemaining: Math.max(0, MAX_DAILY_CLAIMS - effectiveAttempts),
+      resetAt: windowExpired ? null : resetAt,
+      lastError: r.last_error,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  });
 }
 
-export function startRewardDeliveryWorker() {
-  void processPendingRewardJobs().catch((error) => {
-    console.error('[reward-worker] initial run failed:', error);
-  });
+type ClaimResult =
+  | { ok: true; status: 'delivered' }
+  | { ok: false; reason: 'player_offline' | 'inventory_full' | 'error'; message: string; attemptsRemaining: number };
 
-  setInterval(() => {
-    void processPendingRewardJobs().catch((error) => {
-      console.error('[reward-worker] periodic run failed:', error);
+export async function claimReward(userId: string, jobId: number): Promise<ClaimResult> {
+  const db = await getDbPool();
+  const conn = await db.getConnection();
+
+  let job: any;
+  let newDailyAttempts = 0;
+
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.execute(
+      `SELECT id, stripe_session_id, user_id, mc_username, reward_id, command_text, status,
+              daily_attempts, daily_attempts_reset_at, updated_at
+       FROM reward_delivery_jobs
+       WHERE id = ? FOR UPDATE`,
+      [jobId]
+    );
+    if (!Array.isArray(rows) || rows.length === 0) {
+      await conn.rollback();
+      throw new Error('job_not_found');
+    }
+    job = rows[0];
+    if (String(job.user_id) !== String(userId)) {
+      await conn.rollback();
+      throw new Error('forbidden');
+    }
+    if (job.status !== 'pending_claim') {
+      await conn.rollback();
+      throw new Error(`invalid_status:${job.status}`);
+    }
+
+    const now = new Date();
+    const resetAt = job.daily_attempts_reset_at ? new Date(job.daily_attempts_reset_at) : null;
+    const windowExpired = !resetAt || resetAt <= now;
+    const currentAttempts = windowExpired ? 0 : Number(job.daily_attempts ?? 0);
+
+    if (currentAttempts >= MAX_DAILY_CLAIMS) {
+      await conn.rollback();
+      throw new Error('daily_limit_reached');
+    }
+
+    // Cooldown 10s anti-spam entre claims sur le même job.
+    const lastUpdate = job.updated_at ? new Date(job.updated_at) : null;
+    if (lastUpdate && now.getTime() - lastUpdate.getTime() < CLAIM_COOLDOWN_MS) {
+      await conn.rollback();
+      throw new Error('cooldown');
+    }
+
+    newDailyAttempts = currentAttempts + 1;
+    const newResetAt = windowExpired
+      ? new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      : resetAt!;
+
+    await conn.execute(
+      `UPDATE reward_delivery_jobs
+       SET daily_attempts = ?, daily_attempts_reset_at = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [newDailyAttempts, newResetAt, jobId]
+    );
+    await conn.commit();
+  } catch (error) {
+    try { await conn.rollback(); } catch {}
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  const mcUsername = String(job.mc_username);
+  const rewardId = String(job.reward_id);
+  const command = buildRewardCommand(mcUsername, rewardId);
+  const attemptsRemaining = MAX_DAILY_CLAIMS - newDailyAttempts;
+
+  try {
+    const response = await withRcon(async (send) => {
+      await ensurePlayerCanReceiveReward(send, mcUsername);
+      return send(command);
     });
-  }, 15_000);
+    await db.execute(
+      `UPDATE reward_delivery_jobs
+       SET status = 'completed', delivered_at = NOW(), last_error = NULL, updated_at = NOW()
+       WHERE id = ?`,
+      [jobId]
+    );
+    logSale({
+      type: 'reward_delivered',
+      stripeSessionId: String(job.stripe_session_id),
+      userId,
+      mcUsername,
+      rewardId,
+      rconResponse: response,
+    });
+    console.log(`[claim] job=${jobId} user=${mcUsername} reward=${rewardId} → delivered`);
+    return { ok: true, status: 'delivered' };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    let reason: 'player_offline' | 'inventory_full' | 'error' = 'error';
+    if (error instanceof PlayerOfflineError) reason = 'player_offline';
+    else if (error instanceof InventoryFullError) reason = 'inventory_full';
+
+    await db.execute(
+      `UPDATE reward_delivery_jobs SET last_error = ?, updated_at = NOW() WHERE id = ?`,
+      [errorMessage, jobId]
+    );
+    console.log(`[claim] job=${jobId} user=${mcUsername} → ${reason} (${attemptsRemaining} tentatives restantes)`);
+    return { ok: false, reason, message: errorMessage, attemptsRemaining };
+  }
 }
