@@ -1,5 +1,3 @@
-import fs from 'node:fs/promises';
-import { env } from '../config/env.js';
 import { getDbPool } from '../db/mysql.js';
 import { withRcon } from './rconService.js';
 
@@ -26,9 +24,12 @@ function buildRewardCommand(mcUsername: string, rewardId: string) {
   return `give ${mcUsername} diamond 10`;
 }
 
-async function appendSalesLog(entry: Record<string, unknown>) {
-  const line = JSON.stringify({ ...entry, ts: new Date().toISOString() }) + '\n';
-  await fs.appendFile(env.SALES_LOG_PATH, line, 'utf8');
+function logSale(entry: Record<string, unknown>) {
+  try {
+    console.log(JSON.stringify({ ...entry, ts: new Date().toISOString() }));
+  } catch {
+    // jamais throw — un échec de log ne doit pas corrompre le statut du job
+  }
 }
 
 function stripMcFormatting(s: string) {
@@ -50,6 +51,13 @@ function parseScoreFromOutput(output: string): number {
   return Number(match[1]);
 }
 
+class PlayerOfflineError extends Error {
+  constructor(user: string) { super(`player_offline:${user}`); }
+}
+class InventoryFullError extends Error {
+  constructor(user: string, slots: number) { super(`inventory_full:${user}:${slots}/${INVENTORY_MAX_SLOTS}`); }
+}
+
 async function ensurePlayerCanReceiveReward(
   send: (command: string) => Promise<string>,
   mcUsername: string
@@ -57,9 +65,7 @@ async function ensurePlayerCanReceiveReward(
   const listOutput = await send('minecraft:list');
   const players = parseOnlinePlayers(listOutput);
   if (!players.includes(mcUsername)) {
-    const preview = stripMcFormatting(listOutput).slice(0, 400);
-    console.warn(`[reward-worker] ${mcUsername} absent de la liste (aperçu réponse): ${preview}`);
-    throw new Error(`Joueur hors ligne: ${mcUsername}`);
+    throw new PlayerOfflineError(mcUsername);
   }
 
   try {
@@ -74,7 +80,7 @@ async function ensurePlayerCanReceiveReward(
   const scoreOutput = await send(`scoreboard players get ${SCORE_CHECK_ID} boutique`);
   const occupiedSlots = parseScoreFromOutput(scoreOutput);
   if (occupiedSlots >= INVENTORY_MAX_SLOTS) {
-    throw new Error(`Inventaire plein pour ${mcUsername} (${occupiedSlots}/${INVENTORY_MAX_SLOTS})`);
+    throw new InventoryFullError(mcUsername, occupiedSlots);
   }
 }
 
@@ -128,21 +134,35 @@ export async function processPendingRewardJobs(limit = 20) {
          WHERE id = ?`,
         [id]
       );
-      await appendSalesLog({
+      console.log(`[worker] job=${id} user=${mcUsername} reward=${rewardId} → delivered`);
+      logSale({
         type: 'reward_delivered',
         stripeSessionId: String(raw.stripe_session_id),
         userId: String(raw.user_id),
         mcUsername,
-        rewardId: String(raw.reward_id),
+        rewardId,
         rconResponse: response,
       });
     } catch (error) {
       const nextAttempts = attempts + 1;
       const errorMessage = error instanceof Error ? error.message : String(error);
       const isAuthFailure = /authentication failed/i.test(errorMessage);
-      const nextAt = new Date(Date.now() + (isAuthFailure ? 10 * 60 * 1000 : RETRY_DELAY_MS));
+      const isOffline = error instanceof PlayerOfflineError;
+      const isInvFull = error instanceof InventoryFullError;
+      const retryMs = isAuthFailure ? 10 * 60 * 1000 : RETRY_DELAY_MS;
+      const nextAt = new Date(Date.now() + retryMs);
       const status = isAuthFailure || nextAttempts >= MAX_ATTEMPTS ? 'dead' : 'failed';
-      console.error(`[reward-worker] job ${id} failed (attempt ${nextAttempts}):`, error);
+
+      if (isOffline) {
+        console.log(`[worker] job=${id} user=${mcUsername} → offline (retry ${retryMs / 1000}s)`);
+      } else if (isInvFull) {
+        console.log(`[worker] job=${id} user=${mcUsername} → inventory_full (retry ${retryMs / 1000}s)`);
+      } else if (status === 'dead') {
+        console.error(`[worker] job=${id} user=${mcUsername} → dead: ${errorMessage}`);
+      } else {
+        console.error(`[worker] job=${id} user=${mcUsername} → error: ${errorMessage} (retry ${retryMs / 1000}s)`);
+      }
+
       await db.execute(
         `UPDATE reward_delivery_jobs
          SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = NOW()
