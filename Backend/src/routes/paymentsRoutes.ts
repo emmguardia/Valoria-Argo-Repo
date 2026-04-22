@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { getDbPool } from '../db/mysql.js';
-import { enqueueRewardDeliveryJob } from '../services/rewardDeliveryService.js';
+import { claimReward, listPendingRewardsForUser } from '../services/rewardDeliveryService.js';
+import { enqueueEcusSync } from '../services/ecusSyncService.js';
 import { paymentsLimiter, webhookLimiter } from '../middleware/rateLimitMiddleware.js';
 
 export const paymentsRouter = Router();
@@ -159,12 +160,7 @@ async function persistPaidSession(session: Stripe.Checkout.Session) {
     const newEcus = Array.isArray(updatedRows) && updatedRows.length > 0 ? Number((updatedRows[0] as any).ecus ?? 0) : 0;
     await conn.commit();
 
-    await enqueueRewardDeliveryJob({
-      stripeSessionId: session.id,
-      userId: String(userId),
-      mcUsername: String(mcUsername),
-      rewardId: String(rewardId),
-    });
+    await enqueueEcusSync(String(userId), String(mcUsername));
 
     return { duplicated: false, credited: ecus, ecus: newEcus };
   } catch (error) {
@@ -246,5 +242,48 @@ paymentsRouter.post('/webhooks/stripe', webhookLimiter, async (req, res) => {
   } catch (error) {
     console.error('[payments/stripe-webhook] processing error:', error);
     return res.status(500).json({ error: 'Erreur serveur webhook Stripe' });
+  }
+});
+
+paymentsRouter.get('/rewards/pending', paymentsLimiter, authenticateToken, async (req, res) => {
+  const user = (req as any).user as { userId?: string } | undefined;
+  if (!user?.userId) return res.status(401).json({ error: 'Token invalide' });
+
+  try {
+    const items = await listPendingRewardsForUser(String(user.userId));
+    return res.status(200).json({ items });
+  } catch (error) {
+    console.error('[payments/rewards/pending] error:', error);
+    return res.status(500).json({ error: 'Erreur récupération récompenses' });
+  }
+});
+
+const claimParamsSchema = z.object({ id: z.coerce.number().int().positive() });
+
+paymentsRouter.post('/rewards/:id/claim', paymentsLimiter, authenticateToken, async (req, res) => {
+  const user = (req as any).user as { userId?: string } | undefined;
+  if (!user?.userId) return res.status(401).json({ error: 'Token invalide' });
+
+  const parsed = claimParamsSchema.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: 'Id récompense invalide' });
+
+  try {
+    const result = await claimReward(String(user.userId), parsed.data.id);
+    if (result.ok) return res.status(200).json({ ok: true, status: 'delivered' });
+    return res.status(409).json({
+      ok: false,
+      reason: result.reason,
+      message: result.message,
+      attemptsRemaining: result.attemptsRemaining,
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg === 'job_not_found') return res.status(404).json({ error: 'Récompense introuvable' });
+    if (msg === 'forbidden') return res.status(403).json({ error: 'Récompense non autorisée' });
+    if (msg.startsWith('invalid_status:')) return res.status(409).json({ error: 'Récompense déjà traitée' });
+    if (msg === 'daily_limit_reached') return res.status(429).json({ error: 'Limite de 3 tentatives atteinte, réessaie demain' });
+    if (msg === 'cooldown') return res.status(429).json({ error: 'Attends quelques secondes avant de réessayer' });
+    console.error('[payments/rewards/claim] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur réclamation' });
   }
 });
