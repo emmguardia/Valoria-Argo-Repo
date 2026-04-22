@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<coreProperties xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties">
+  <dc:creator>Bitnami Labs</dc:creator>
+  <dc:description>Problem: "I can manage all my Kubernetes config in git, except Secrets."
+
+Solution: Encrypt your Secret into a SealedSecret, which is safe to store - even inside a public repository. The SealedSecret can be decrypted only by the controller running in the target cluster and nobody else (not even the original author) is able to obtain the original Secret from the SealedSecret.</dc:description>
+  <dc:identifier>sealed-secrets</dc:identifier>
+  <version>0.36.6</version>
+  <keywords>Kubernetes k8s secrets</keywords>
+  <lastModifiedBy>choco, Version=2.7.1.0, Culture=neutral, PublicKeyToken=79d02ea9cad655eb;Microsoft Windows NT 10.0.26100.0;.NET Framework 4.8</lastModifiedBy>
+</coreProperties>
