@@ -3,7 +3,7 @@ import { withRcon } from './rconService.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const OFFLINE_RETRY_MS = 60 * 60 * 1000;
-const OBJECTIVE_NAME = 'valoria_ecus';
+const OBJECTIVE_NAME = 'ecus';
 
 function sanitizeMcUsername(value: string) {
   const v = value.trim();
