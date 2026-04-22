@@ -16,3 +16,9 @@ charts/valoria/secrets/*.pem
 # Env files
 .env
 .env.*
+
+# Cursor / agents artifacts
+.claude/
+
+# Local tooling
+.tools/
