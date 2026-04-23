@@ -10,12 +10,14 @@ export interface PurchaseRecord {
 export interface UserProfile {
   pseudo: string;
   email: string;
+  role?: 'user' | 'admin';
 }
 
 interface UserContextType {
   isLoggedIn: boolean;
   ecus: number;
   profile: UserProfile | null;
+  token: string | null;
   purchaseHistory: PurchaseRecord[];
   register: (data: { pseudo: string; email: string; password: string }) => Promise<void>;
   login: (data: { identifier: { pseudo?: string; email?: string }; password: string; rememberMe?: boolean }) => Promise<void>;
@@ -111,7 +113,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!response.ok) {
       throw new Error(payload?.error || 'Erreur lors du rafraîchissement du profil');
     }
-    const newProfile = { pseudo: String(payload.pseudo || ''), email: String(payload.email || '') };
+    const newProfile: UserProfile = {
+      pseudo: String(payload.pseudo || ''),
+      email: String(payload.email || ''),
+      role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+    };
     const newEcus = Number(payload.ecus ?? 0);
     setProfile(newProfile);
     setEcus(newEcus);
@@ -135,7 +141,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const user = payload?.user;
       if (!tokenValue || !user) throw new Error('Réponse d’inscription invalide');
 
-      const newProfile = { pseudo: String(user.pseudo || ''), email: String(user.email || '') };
+      const newProfile: UserProfile = {
+        pseudo: String(user.pseudo || ''),
+        email: String(user.email || ''),
+        role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+      };
 
       setToken(tokenValue);
       setIsLoggedIn(true);
@@ -177,7 +187,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const user = payload?.user;
       if (!tokenValue || !user) throw new Error('Réponse de connexion invalide');
 
-      const newProfile = { pseudo: String(user.pseudo || ''), email: String(user.email || '') };
+      const newProfile: UserProfile = {
+        pseudo: String(user.pseudo || ''),
+        email: String(user.email || ''),
+        role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+      };
 
       setToken(tokenValue);
       setIsLoggedIn(true);
@@ -234,9 +248,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           const payload = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(payload?.error || 'Erreur lors de la mise à jour');
 
-          const newProfile = {
+          const newProfile: UserProfile = {
             pseudo: String(payload?.pseudo || ''),
             email: String(payload?.email || ''),
+            role: (payload?.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
           };
 
           setProfile(newProfile);
@@ -337,7 +352,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload?.error || 'Erreur lors du chargement du profil');
         if (cancelled) return;
-        const newProfile = { pseudo: String(payload.pseudo || ''), email: String(payload.email || '') };
+        const newProfile: UserProfile = {
+      pseudo: String(payload.pseudo || ''),
+      email: String(payload.email || ''),
+      role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+    };
         const newEcus = Number(payload.ecus ?? 0);
         setProfile(newProfile);
         setEcus(newEcus);
@@ -360,6 +379,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         isLoggedIn,
         ecus,
         profile,
+        token,
         purchaseHistory,
         login,
         register,

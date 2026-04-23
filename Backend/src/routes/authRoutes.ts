@@ -112,7 +112,7 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: insertedId, pseudo, email },
+      { userId: insertedId, pseudo, email, role: 'user' },
       requireJwtPrivateKey(),
       (() => {
         const options: jwt.SignOptions = { algorithm: 'RS256', expiresIn: '7d' };
@@ -130,7 +130,8 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
         id: insertedId,
         pseudo,
         email,
-        ecus: 0
+        ecus: 0,
+        role: 'user'
       }
     });
   } catch (err) {
@@ -164,14 +165,14 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
     let rows: unknown;
     if (identifierPseudo) {
       const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, ecus, role, banned_at, banned_reason, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
         [identifierPseudo]
       );
       rows = result[0];
     } else {
       const emailValue = identifierEmail!;
       const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, created_at, last_login FROM users WHERE email = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, ecus, role, banned_at, banned_reason, created_at, last_login FROM users WHERE email = ? LIMIT 1',
         [emailValue]
       );
       rows = result[0];
@@ -187,10 +188,17 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Identifiants invalides' });
     }
 
+    if (user.banned_at) {
+      return res.status(403).json({
+        error: 'Compte suspendu',
+        reason: user.banned_reason || 'Non communiqué',
+      });
+    }
+
     await db.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
 
     const token = jwt.sign(
-      { userId: String(user.id), pseudo: user.pseudo, email: user.email },
+      { userId: String(user.id), pseudo: user.pseudo, email: user.email, role: user.role || 'user' },
       requireJwtPrivateKey(),
       (() => {
         const options: jwt.SignOptions = {
@@ -212,6 +220,7 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
         pseudo: user.pseudo,
         email: user.email,
         ecus: user.ecus ?? 0,
+        role: user.role || 'user',
         createdAt: user.created_at,
         lastLogin: user.last_login
       }
@@ -230,17 +239,22 @@ authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
 
     const db = await getDbPool();
     const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, created_at, last_login FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, pseudo, email, ecus, role, banned_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
       [userId]
     );
     const user = Array.isArray(rows) ? (rows[0] as any) : null;
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    if (user.banned_at) {
+      return res.status(403).json({ error: 'Compte suspendu' });
+    }
 
     return res.json({
       id: String(user.id),
       pseudo: user.pseudo,
       email: user.email,
       ecus: user.ecus ?? 0,
+      role: user.role || 'user',
       createdAt: user.created_at,
       lastLogin: user.last_login
     });
@@ -304,7 +318,7 @@ authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
     }
 
     const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, created_at, last_login FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, pseudo, email, ecus, role, created_at, last_login FROM users WHERE id = ? LIMIT 1',
       [userId]
     );
     const user = Array.isArray(rows) ? (rows[0] as any) : null;
@@ -315,6 +329,7 @@ authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
       pseudo: user.pseudo,
       email: user.email,
       ecus: user.ecus ?? 0,
+      role: user.role || 'user',
       createdAt: user.created_at,
       lastLogin: user.last_login
     });
