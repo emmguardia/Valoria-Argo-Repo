@@ -6,6 +6,7 @@ type JwtPayload = {
   userId: string;
   pseudo?: string;
   email?: string;
+  role?: 'user' | 'admin';
   iat?: number;
   exp?: number;
 };
@@ -31,3 +32,13 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const user = (req as any).user as JwtPayload | undefined;
+  if (!user?.userId) {
+    return res.status(401).json({ error: 'Token invalide' });
+  }
+  if (user.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+  }
+  return next();
+}

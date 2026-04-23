@@ -3,6 +3,8 @@ import express from 'express';
 import { env } from './config/env.js';
 import { authRouter } from './routes/authRoutes.js';
 import { paymentsRouter } from './routes/paymentsRoutes.js';
+import { productsRouter } from './routes/productsRoutes.js';
+import { adminRouter } from './routes/adminRoutes.js';
 import { startEcusSyncWorker } from './services/ecusSyncService.js';
 import { getRconRuntimeFingerprint } from './services/rconService.js';
 
@@ -16,6 +18,8 @@ app.use('/api/payments/webhooks/stripe', express.raw({ type: 'application/json' 
 app.use('/api', express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/products', productsRouter);
+app.use('/api/admin', adminRouter);
 
 app.listen(env.PORT, () => {
   console.log(`Valoria backend listening on :${env.PORT}`);

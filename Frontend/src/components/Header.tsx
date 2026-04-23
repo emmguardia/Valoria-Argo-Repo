@@ -1,4 +1,4 @@
-import { Coins, User, Menu, MessageCircle } from 'lucide-react';
+import { Coins, User, Menu, MessageCircle, Shield } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
@@ -19,7 +19,8 @@ export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { isLoggedIn, ecus, logout } = useUser();
+  const { isLoggedIn, ecus, profile, logout } = useUser();
+  const isAdmin = profile?.role === 'admin';
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 10);
@@ -86,6 +87,15 @@ export default function Header() {
               <Coins className="w-5 h-5 text-amber-600" />
               <span className="whitespace-nowrap">{isLoggedIn ? `${ecus} Écus` : 'Acheter des Écus'}</span>
             </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 font-semibold hover:bg-amber-500/25 transition-all text-sm sm:text-base`}
+              >
+                <Shield className="w-5 h-5" />
+                <span>Admin</span>
+              </Link>
+            )}
             <Link
               to={isLoggedIn ? '/profile' : '/connexion'}
               className={`flex items-center gap-3 px-6 py-4 rounded-lg transition-all duration-300 text-lg sm:text-xl ${topTextClass} ${topTextHoverClass}`}
@@ -132,6 +142,16 @@ export default function Header() {
               <Coins className="w-5 h-5" />
               <span className="whitespace-nowrap">{isLoggedIn ? `${ecus} Écus` : 'Acheter des Écus'}</span>
             </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 py-5 px-6 text-amber-700 rounded-lg text-lg font-semibold"
+              >
+                <Shield className="w-5 h-5" />
+                Admin
+              </Link>
+            )}
             <Link
               to={isLoggedIn ? '/profile' : '/connexion'}
               onClick={() => setIsMenuOpen(false)}

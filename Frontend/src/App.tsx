@@ -16,6 +16,13 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const MentionsLegalesPage = lazy(() => import('./pages/MentionsLegalesPage'));
 const CGVPage = lazy(() => import('./pages/CGVPage'));
 const ReglesPage = lazy(() => import('./pages/ReglesPage'));
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage'));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
+const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
+const AdminRewardJobsPage = lazy(() => import('./pages/admin/AdminRewardJobsPage'));
+const RequireAdmin = lazy(() => import('./components/admin/RequireAdmin'));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -57,6 +64,13 @@ function App() {
               <Route path="/mentions-legales" element={<MentionsLegalesPage />} />
               <Route path="/cgv" element={<CGVPage />} />
               <Route path="/regles" element={<ReglesPage />} />
+              <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
+                <Route index element={<AdminDashboardPage />} />
+                <Route path="products" element={<AdminProductsPage />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="payments" element={<AdminPaymentsPage />} />
+                <Route path="reward-jobs" element={<AdminRewardJobsPage />} />
+              </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
