@@ -5,6 +5,7 @@ import { authRouter } from './routes/authRoutes.js';
 import { paymentsRouter } from './routes/paymentsRoutes.js';
 import { productsRouter } from './routes/productsRoutes.js';
 import { adminRouter } from './routes/adminRoutes.js';
+import { voteRouter } from './routes/voteRoutes.js';
 import { startEcusSyncWorker } from './services/ecusSyncService.js';
 import { getRconRuntimeFingerprint } from './services/rconService.js';
 
@@ -20,6 +21,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/votes', voteRouter);
 
 app.listen(env.PORT, () => {
   console.log(`Valoria backend listening on :${env.PORT}`);

@@ -22,7 +22,24 @@ const envSchema = z.object({
   RCON_PASSWORD: z.string().min(1).optional(),
   /** Délai max (ms) pour connexion + réponses RCON (inventaire volumineux). Défaut rcon-client: 2000 — trop court. */
   RCON_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
-  TRUST_PROXY: z.coerce.number().int().min(0).default(1)
+  TRUST_PROXY: z.coerce.number().int().min(0).default(1),
+  // Vote sites — configurables, chacun désactivé si non renseigné.
+  // Minecraft-Serveur.com : token API + URL publique de la page de vote.
+  VOTE_MS_API_KEY: z.string().optional(),
+  VOTE_MS_SERVER_ID: z.string().optional(),
+  VOTE_MS_VOTE_URL: z.string().url().optional(),
+  // Serveurs-Minecraft.org : IP du serveur (clé de check) + URL publique.
+  VOTE_SM_SERVER_IP: z.string().optional(),
+  VOTE_SM_VOTE_URL: z.string().url().optional(),
+  // Top-Serveurs.net : token + URL publique.
+  VOTE_TS_API_KEY: z.string().optional(),
+  VOTE_TS_VOTE_URL: z.string().url().optional(),
+  // Minecraft-MP.com : token + server id + URL publique.
+  VOTE_MMP_API_KEY: z.string().optional(),
+  VOTE_MMP_SERVER_ID: z.string().optional(),
+  VOTE_MMP_VOTE_URL: z.string().url().optional(),
+  // Récompense in-game déclenchée à chaque vote validé.
+  VOTE_REWARD_COMMAND: z.string().default('fvote add {user} small_rewards')
 });
 
 const parsed = envSchema.safeParse(process.env);

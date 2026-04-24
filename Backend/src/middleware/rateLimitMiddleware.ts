@@ -31,3 +31,19 @@ export const webhookLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Trop de webhooks reçus.' },
 });
+
+export const voteCallbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de callbacks de votes.' },
+});
+
+export const voteReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requêtes.' },
+});
