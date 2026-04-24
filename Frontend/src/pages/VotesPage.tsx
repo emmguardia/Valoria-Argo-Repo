@@ -60,7 +60,9 @@ export default function VotesPage() {
         });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) setStats(data);
-      } catch {}
+      } catch {
+        // best-effort, on ignore les erreurs de stats perso
+      }
     })();
     return () => { cancelled = true; };
   }, [isLoggedIn, token]);

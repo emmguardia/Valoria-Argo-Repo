@@ -4,7 +4,7 @@ import { useUser } from '../../context/UserContext';
 import { adminApi, type AdminUser } from '../../lib/adminApi';
 import {
   AdminPageHeader, AdminTable, AdminTableHead, AdminTableRow,
-  Badge, Empty, ErrorBanner, IconButton, Pagination, inputCls,
+  Badge, Empty, ErrorBanner, IconButton, Pagination,
 } from '../../components/admin/ui';
 
 export default function AdminUsersPage() {
