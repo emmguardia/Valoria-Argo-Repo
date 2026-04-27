@@ -80,8 +80,49 @@ async function initSchema(db: Pool) {
       updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY uniq_reward_delivery_session (stripe_session_id),
-      KEY idx_reward_delivery_status_next (status, next_attempt_at)
+      KEY idx_reward_delivery_status_next (status, next_attempt_at),
+      KEY idx_reward_delivery_user_id (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS votes (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NULL,
+      mc_username VARCHAR(32) NOT NULL,
+      site_name VARCHAR(64) NOT NULL,
+      voted_day DATE NOT NULL DEFAULT (CURRENT_DATE()),
+      voted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      callback_ip VARCHAR(45) NULL,
+      raw_payload JSON NULL,
+      rcon_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      rcon_error VARCHAR(500) NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_vote_site_user_day (site_name, mc_username, voted_day),
+      KEY idx_votes_mc_username (mc_username),
+      KEY idx_votes_voted_at (voted_at),
+      KEY idx_votes_user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ecus_adjustments (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NOT NULL,
+      admin_id BIGINT UNSIGNED NOT NULL,
+      delta INT NOT NULL,
+      reason VARCHAR(500) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_ecus_adj_user_id (user_id),
+      KEY idx_ecus_adj_admin_id (admin_id),
+      KEY idx_ecus_adj_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  // Colonnes optionnelles ajoutées en migration progressive sur la table users.
+  await db.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(32) NOT NULL DEFAULT 'user'`);
+  await db.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_at TIMESTAMP NULL DEFAULT NULL`);
+  await db.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_reason VARCHAR(500) NULL DEFAULT NULL`);
 }
 

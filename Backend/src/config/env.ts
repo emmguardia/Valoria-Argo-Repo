@@ -39,7 +39,8 @@ const envSchema = z.object({
   VOTE_MMP_SERVER_ID: z.string().optional(),
   VOTE_MMP_VOTE_URL: z.string().url().optional(),
   // Récompense in-game déclenchée à chaque vote validé.
-  VOTE_REWARD_COMMAND: z.string().default('fvote add {user} small_rewards')
+  VOTE_REWARD_COMMAND: z.string().default('fvote add {user} small_rewards'),
+  FRONTEND_URL: z.string().url().default('https://valoria.zenixweb.fr'),
 });
 
 const parsed = envSchema.safeParse(process.env);

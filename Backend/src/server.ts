@@ -9,10 +9,21 @@ import { voteRouter } from './routes/voteRoutes.js';
 import { startEcusSyncWorker } from './services/ecusSyncService.js';
 import { getRconRuntimeFingerprint } from './services/rconService.js';
 
+const ALLOWED_ORIGINS = new Set([
+  env.FRONTEND_URL,
+  ...(env.NODE_ENV !== 'production' ? ['http://localhost:5173', 'http://localhost:3000'] : []),
+]);
+
 const app = express();
 app.set('trust proxy', env.TRUST_PROXY);
 
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Les requêtes sans Origin (curl, Postman, webhooks Stripe) sont autorisées.
+    if (!origin || ALLOWED_ORIGINS.has(origin)) return callback(null, true);
+    callback(new Error(`CORS: origine non autorisée — ${origin}`));
+  },
+}));
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
 app.use('/api/payments/webhooks/stripe', express.raw({ type: 'application/json' }));

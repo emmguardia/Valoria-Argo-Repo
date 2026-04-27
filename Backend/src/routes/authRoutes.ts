@@ -38,7 +38,8 @@ function validatePassword(password: string) {
     password.length >= 8 &&
     /[A-Z]/.test(password) &&
     /[a-z]/.test(password) &&
-    /[0-9]/.test(password)
+    /[0-9]/.test(password) &&
+    /[^a-zA-Z0-9]/.test(password)
   );
 }
 
@@ -51,11 +52,12 @@ const pseudoSchema = z
 
 const emailSchema = z.string().trim().email();
 
+// max 72 : limite interne de bcrypt (les octets au-delà sont ignorés silencieusement).
 const passwordSchema = z
   .string()
   .min(8)
-  .max(128)
-  .refine((v) => validatePassword(v), 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre');
+  .max(72)
+  .refine((v) => validatePassword(v), 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial');
 
 const registerSchema = z.object({
   pseudo: pseudoSchema,

@@ -40,12 +40,17 @@ function getStripeClient() {
   return new Stripe(env.STRIPE_SECRET_KEY);
 }
 
+const ALLOWED_REDIRECT_ORIGINS = new Set([
+  env.FRONTEND_URL,
+  ...(env.NODE_ENV !== 'production' ? ['http://localhost:5173', 'http://localhost:3000'] : []),
+]);
+
 function getFrontendUrl(req: Request) {
   const origin = req.get('origin');
-  if (typeof origin === 'string' && origin.startsWith('http')) {
+  if (typeof origin === 'string' && ALLOWED_REDIRECT_ORIGINS.has(origin)) {
     return origin;
   }
-  return 'https://valoria.zenixweb.fr';
+  return env.FRONTEND_URL;
 }
 
 paymentsRouter.get('/status', paymentsLimiter, (_req, res) => {

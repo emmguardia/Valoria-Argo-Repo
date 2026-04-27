@@ -31,16 +31,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://valoria.zenixweb.fr/connexion</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://valoria.zenixweb.fr/ecus</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://valoria.zenixweb.fr/mentions-legales</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
