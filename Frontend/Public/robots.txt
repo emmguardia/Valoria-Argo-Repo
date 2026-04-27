@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
 
+Disallow: /connexion
+Disallow: /profile
+Disallow: /ecus
+Disallow: /admin/
+
 Sitemap: https://valoria.zenixweb.fr/sitemap.xml
