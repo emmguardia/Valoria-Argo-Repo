@@ -1,0 +1,20 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: valoria-ingress
+  namespace: {{ include "valoria.namespace" . }}
+  labels:
+    {{- include "valoria.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: "Host(`valoria.zenixweb.fr`)"
+      kind: Rule
+      services:
+        - name: valoria-front
+          port: 80
+      middlewares:
+        - name: security-headers
+        - name: crowdsec-bouncer
+          namespace: kube-system
