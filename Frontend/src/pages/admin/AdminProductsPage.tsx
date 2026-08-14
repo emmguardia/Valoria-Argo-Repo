@@ -128,7 +128,7 @@ export default function AdminProductsPage() {
       <Modal
         open={editing !== null}
         onClose={close}
-        title={editing === 'new' ? 'Nouveau produit' : editing && editing !== 'new' ? `Éditer #${editing.id}` : ''}
+        title={editing === 'new' ? 'Nouveau produit' : editing ? `Éditer #${editing.id}` : ''}
         footer={
           <>
             <AdminButton variant="ghost" onClick={close}>Annuler</AdminButton>

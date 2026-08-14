@@ -1,0 +1,22 @@
+# Sans ce fichier, le `COPY . .` du stage de build embarquait le node_modules de
+# la machine hôte et écrasait celui que pnpm venait d'installer dans l'image —
+# avec, sous Windows, des binaires natifs incompatibles Linux. Les builds
+# n'étaient donc reproductibles que par chance.
+node_modules
+.pnpm-store
+
+# Produit par la compilation dans l'image, pas repris de l'hôte
+dist
+
+.git
+.gitignore
+*.md
+.env
+.env.*
+*.log
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+coverage
+.nyc_output

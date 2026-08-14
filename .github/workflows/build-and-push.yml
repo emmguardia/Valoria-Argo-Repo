@@ -1,3 +1,45 @@
+# Build & push : main -> bump version + scan Trivy + push GHCR + pin digest dans values.yaml
+# ArgoCD reprend ensuite le relai et déploie sur le cluster.
+#
+# Runners GitHub-hosted ubuntu-latest (illimités pour repo public).
+# pnpm + minimum-release-age 24h pour défense supply-chain.
+#
+# Secrets GitHub requis : aucun en dehors du GITHUB_TOKEN fourni par la plateforme.
+#
+# ── CE QUI A CHANGÉ ──────────────────────────────────────────────────────────
+#
+# 1. TRIVY SCANNE AVANT LE PUSH, PLUS APRÈS.
+#    C'était le défaut le plus grave : l'ordre était `Build and push`
+#    (push: true) PUIS `Trivy scan`. L'image vulnérable était donc déjà publiée
+#    sur GHCR quand le scan la rejetait. Le job échouait, mais le tag existait
+#    bel et bien dans le registre. Désormais : build local, scan, et push
+#    seulement si le scan est vert.
+#
+# 2. L'image scannée est exactement l'image poussée.
+#    Build unique avec `load: true`, puis `docker tag` + `docker push` — pas un
+#    second `docker build` sans garantie d'identité.
+#
+# 3. LE BACKEND EST ENFIN CONTRÔLÉ.
+#    Il n'avait ni audit ni test : seul le frontend passait un `npm audit`.
+#    Le backend gagne `pnpm audit --prod --audit-level high`. Il n'a toujours
+#    aucun test automatisé — package.json ne déclare aucun script `test`.
+#
+# 4. npm -> pnpm, Node 20 -> 26.
+#    Node 20 est EOL depuis avril 2026. Et la CI testait en Node 20 pendant que
+#    le frontend compilait en Node 25 : on ne testait pas ce qu'on déployait.
+#    pnpm apporte `minimum-release-age=1440` (.npmrc), sans équivalent chez npm.
+#
+# 5. Le lint n'est plus neutralisé par `--max-warnings 999`, qui revenait à ne
+#    rien vérifier. Le typecheck frontend devient bloquant : il ne tournait
+#    nulle part, et `vite build` ne type-vérifie pas — une erreur de type
+#    dormait donc dans le code sans que rien ne la remonte.
+#
+# 6. Le pin de digest est vérifié avant ET après le sed. Un sed qui ne matchait
+#    rien laissait le job passer au vert sans rien déployer.
+#
+# Le scan Trivy IaC (charts + argocd) est conservé ici comme garde-fou de
+# déploiement. security.yml le rejoue par ailleurs sur planning hebdomadaire.
+
 name: Build and push to GHCR
 
 on:
@@ -11,71 +53,101 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  TRIVY_IMAGE: aquasec/trivy:0.69.3
+  TRIVY_IMAGE: aquasec/trivy:0.73.0
+  PNPM_VERSION: 10.33.4
+  NODE_VERSION: '26'
 
 permissions:
   contents: read
   packages: write
 
+# false et non true : ce job pousse des images sur GHCR puis commite le digest.
+# Une annulation en plein milieu laisse une image publiée que values.yaml ne
+# référence pas.
 concurrency:
   group: build-and-push-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test:
     name: Test & security
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     permissions:
       contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: Frontend/package-lock.json
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: |
+            Backend/pnpm-lock.yaml
+            Frontend/pnpm-lock.yaml
 
+      # ── Frontend ─────────────────────────────────────────────────────────────
       - name: Frontend – install
         working-directory: Frontend
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+        run: pnpm install --frozen-lockfile
 
-      - name: Frontend – audit (moderate+)
-        run: cd Frontend && npm audit --audit-level=moderate
+      - name: Frontend – audit (prod, high+)
+        working-directory: Frontend
+        run: pnpm audit --prod --audit-level high
 
+      # Bloquant. Avant : `npm run lint -- --max-warnings 999`.
       - name: Frontend – lint
-        run: cd Frontend && npm run lint -- --max-warnings 999
+        working-directory: Frontend
+        run: pnpm lint
+
+      # Ne tournait nulle part auparavant : `vite build` ne type-vérifie pas.
+      - name: Frontend – typecheck
+        working-directory: Frontend
+        run: pnpm typecheck
 
       - name: Frontend – build
-        run: cd Frontend && npm run build
+        working-directory: Frontend
+        run: pnpm run build
 
       - name: Frontend – bundle budget
-        run: cd Frontend && node scripts/check-bundle-budget.mjs
+        working-directory: Frontend
+        run: node scripts/check-bundle-budget.mjs
 
       - name: Frontend – bundle analysis report
-        run: cd Frontend && node scripts/analyze-bundle.mjs
+        working-directory: Frontend
+        run: node scripts/analyze-bundle.mjs
 
-      - name: Setup Node for backend
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
+      # ── Backend ──────────────────────────────────────────────────────────────
       - name: Backend – install
         working-directory: Backend
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+        run: pnpm install --frozen-lockfile
+
+      # Nouveau : le backend ne passait aucun audit.
+      - name: Backend – audit (prod, high+)
+        working-directory: Backend
+        run: pnpm audit --prod --audit-level high
 
       - name: Backend – typecheck
-        run: cd Backend && npm run typecheck
+        working-directory: Backend
+        run: pnpm typecheck
 
       - name: Backend – build
-        run: cd Backend && npm run build
+        working-directory: Backend
+        run: pnpm run build
 
+      - name: Backend – tests (if present)
+        working-directory: Backend
+        run: pnpm run --if-present test
+
+      # ── Infrastructure ───────────────────────────────────────────────────────
       - name: "Trivy config scan (IaC: charts + argocd)"
         run: |
           docker run --rm \
@@ -92,26 +164,27 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: write
       packages: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set image tag (prod)
         id: tag
         run: |
+          set -euo pipefail
           CONTENT=$(cat version.txt | tr -d '\r\n ')
           MAJOR=$(echo "$CONTENT" | cut -d. -f1)
           MINOR=$(echo "$CONTENT" | cut -d. -f2)
           PATCH=$(echo "$CONTENT" | cut -d. -f3)
           if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$PATCH" =~ ^[0-9]+$ ]]; then
-            echo "version.txt invalide: $CONTENT (attendu X.Y.Z)"
+            echo "::error::version.txt invalide: $CONTENT (attendu X.Y.Z)"
             exit 1
           fi
           if [ "$PATCH" -lt 9 ]; then
@@ -123,109 +196,187 @@ jobs:
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "$NEW_VERSION" > version.txt
           TAG="v${NEW_VERSION}"
-          echo "IMAGE_TAG=$TAG" >> $GITHUB_ENV
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Version: $CONTENT → $NEW_VERSION (tag: $TAG)"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
+      # ── Frontend ─────────────────────────────────────────────────────────────
+      # Pas d'étape de build ici : le Dockerfile frontend compile Vite dans son
+      # propre stage builder.
       - name: Extract metadata (frontend)
         id: meta-frontend
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/valoria-front
           tags: |
             type=raw,value=${{ steps.tag.outputs.tag }}
 
+      - name: Build frontend (local)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./Frontend
+          load: true
+          push: false
+          tags: valoria-front:candidate
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          pull: true
+
+      - name: Trivy scan frontend (avant push)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            ${{ env.TRIVY_IMAGE }} image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed --format table \
+            valoria-front:candidate
+
+      - name: Push frontend
+        id: push-frontend
+        env:
+          META_TAGS: ${{ steps.meta-frontend.outputs.tags }}
+        run: |
+          set -euo pipefail
+          TARGET=$(printf '%s\n' "$META_TAGS" | head -1)
+          docker tag valoria-front:candidate "$TARGET"
+          PUSH_OUT=$(docker push "$TARGET" | tee /dev/stderr)
+          DIGEST=$(docker buildx imagetools inspect "$TARGET" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+          if [ -z "$DIGEST" ]; then
+            DIGEST=$(printf '%s\n' "$PUSH_OUT" | grep -oE 'sha256:[0-9a-f]{64}' | tail -1 || true)
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Frontend publié : $TARGET (digest: ${DIGEST:-introuvable})"
+
+      # ── Backend ──────────────────────────────────────────────────────────────
       - name: Extract metadata (backend)
         id: meta-backend
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/valoria-back
           tags: |
             type=raw,value=${{ steps.tag.outputs.tag }}
 
-      - name: Build and push frontend
-        id: build-frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./Frontend
-          push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
-          no-cache: true
-          pull: true
-
-      - name: Build and push backend
-        id: build-backend
-        uses: docker/build-push-action@v5
+      - name: Build backend (local)
+        uses: docker/build-push-action@v7
         with:
           context: ./Backend
-          push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
+          load: true
+          push: false
+          tags: valoria-back:candidate
           labels: ${{ steps.meta-backend.outputs.labels }}
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           pull: true
 
-      - name: Trivy scan (frontend)
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      - name: Trivy scan backend (avant push)
         run: |
-          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             ${{ env.TRIVY_IMAGE }} image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed --format table \
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/valoria-front:${{ steps.tag.outputs.tag }}
+            valoria-back:candidate
 
-      - name: Trivy scan (backend)
+      - name: Push backend
+        id: push-backend
         env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          META_TAGS: ${{ steps.meta-backend.outputs.tags }}
         run: |
-          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
-            ${{ env.TRIVY_IMAGE }} image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed --format table \
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/valoria-back:${{ steps.tag.outputs.tag }}
+          set -euo pipefail
+          TARGET=$(printf '%s\n' "$META_TAGS" | head -1)
+          docker tag valoria-back:candidate "$TARGET"
+          PUSH_OUT=$(docker push "$TARGET" | tee /dev/stderr)
+          DIGEST=$(docker buildx imagetools inspect "$TARGET" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+          if [ -z "$DIGEST" ]; then
+            DIGEST=$(printf '%s\n' "$PUSH_OUT" | grep -oE 'sha256:[0-9a-f]{64}' | tail -1 || true)
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Backend publié : $TARGET (digest: ${DIGEST:-introuvable})"
 
+      # ── Pin digest dans values.yaml → ArgoCD sync automatique ────────────────
       - name: Pin Helm values to image digest
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
+          DIGEST_FRONTEND: ${{ steps.push-frontend.outputs.digest }}
+          DIGEST_BACKEND: ${{ steps.push-backend.outputs.digest }}
+          OWNER: ${{ github.repository_owner }}
+          REG: ${{ env.REGISTRY }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          DIGEST_FRONTEND="${{ steps.build-frontend.outputs.digest }}"
-          DIGEST_BACKEND="${{ steps.build-backend.outputs.digest }}"
-          OWNER="${{ github.repository_owner }}"
-          REG="${{ env.REGISTRY }}"
+          set -euo pipefail
+          VALUES_PATH="charts/valoria/values.yaml"
 
-          if [ -n "$DIGEST_FRONTEND" ]; then
+          # Remplace la ligne `image:` d'un composant, en échouant bruyamment si
+          # elle est introuvable ou si le remplacement n'a pas pris. Garde-fou
+          # contre le déploiement fantôme : un sed muet passait au vert.
+          update_image() {
+            local key="$1" newref="$2"
+            if ! grep -qE "^[[:space:]]+image:[[:space:]]*ghcr\.io/.*${key}[@:]" "$VALUES_PATH"; then
+              echo "::error::Aucune ligne 'image:' pour ${key} dans ${VALUES_PATH}. Le pin de digest aurait échoué en silence."
+              exit 1
+            fi
+            sed -i -E "s|^([[:space:]]+)image:[[:space:]]*ghcr\.io/.*${key}[@:].*|\1image: ${newref}|" "$VALUES_PATH"
+            if ! grep -qF "image: ${newref}" "$VALUES_PATH"; then
+              echo "::error::Le remplacement de ${key} n'a pas pris dans ${VALUES_PATH}."
+              exit 1
+            fi
+            echo "  ${key} → ${newref}"
+          }
+
+          if [ -n "${DIGEST_FRONTEND:-}" ]; then
             FRONTEND_IMAGE="${REG}/${OWNER}/valoria-front@${DIGEST_FRONTEND}"
           else
             FRONTEND_IMAGE="${REG}/${OWNER}/valoria-front:${TAG}"
+            echo "::warning::Digest frontend introuvable, pin sur le tag ${TAG} (déploiement OK mais non immuable)."
           fi
-
-          if [ -n "$DIGEST_BACKEND" ]; then
+          if [ -n "${DIGEST_BACKEND:-}" ]; then
             BACKEND_IMAGE="${REG}/${OWNER}/valoria-back@${DIGEST_BACKEND}"
           else
             BACKEND_IMAGE="${REG}/${OWNER}/valoria-back:${TAG}"
+            echo "::warning::Digest backend introuvable, pin sur le tag ${TAG} (déploiement OK mais non immuable)."
           fi
 
-          VALUES_PATH="charts/valoria/values.yaml"
-
-          sed -i "s|  image: ghcr.io/.*valoria-front.*|  image: ${FRONTEND_IMAGE}|" "$VALUES_PATH"
-          sed -i "s|  image: ghcr.io/.*valoria-back.*|  image: ${BACKEND_IMAGE}|" "$VALUES_PATH"
+          update_image "valoria-front" "$FRONTEND_IMAGE"
+          update_image "valoria-back"  "$BACKEND_IMAGE"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add version.txt "$VALUES_PATH"
 
           if git diff --staged --quiet; then
-            echo "Helm values already up to date, skip commit"
+            echo "::warning::Rien à commiter alors que le pin a réussi — values.yaml pointait déjà sur ce digest."
           else
-            git commit -m "chore(helm): pin frontend image to digest $TAG [skip ci]"
-            git pull --rebase origin ${{ github.ref_name }}
-            git push origin ${{ github.ref_name }}
+            git commit -m "chore(helm): pin images to digest ${TAG} [skip ci]"
+
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push origin "HEAD:${BRANCH}"; then
+                pushed=true
+                break
+              fi
+              echo "::warning::Push refusé (tentative ${attempt}/3), rebase sur origin/${BRANCH}…"
+              git fetch origin "$BRANCH"
+              if ! git rebase "origin/${BRANCH}"; then
+                git rebase --abort || true
+                echo "::error::Conflit de rebase sur ${BRANCH}, intervention manuelle requise."
+                exit 1
+              fi
+              sleep $((attempt * 3))
+            done
+            if [ "$pushed" != "true" ]; then
+              echo "::error::Impossible de pousser le pin de digest après 3 tentatives."
+              exit 1
+            fi
           fi
+
+          {
+            echo "### Déploiement ${TAG}"
+            echo "- Frontend : \`${FRONTEND_IMAGE}\`"
+            echo "- Backend : \`${BACKEND_IMAGE}\`"
+            echo ""
+            echo "Images scannées par Trivy avant publication. ArgoCD synchronise le cluster dans les minutes qui suivent."
+          } >> "$GITHUB_STEP_SUMMARY"
