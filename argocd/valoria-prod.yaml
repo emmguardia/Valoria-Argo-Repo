@@ -8,7 +8,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: siteweb
   source:
     repoURL: https://github.com/emmguardia/Valoria-Argo-Repo.git
     targetRevision: main
