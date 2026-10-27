@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUser } from '../../context/UserContext';
 import { adminApi, type AdminPayment } from '../../lib/adminApi';
 import {
@@ -23,16 +23,19 @@ export default function AdminPaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const limit = 30;
 
-  const reload = useCallback(async () => {
-    try {
-      setLoading(true); setError(null);
-      const data = await adminApi.listPayments(token, { page, limit });
-      setItems(data.items); setTotal(data.total);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
-    finally { setLoading(false); }
+  // Chargement fait dans l'effet lui-même (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await adminApi.listPayments(token, { page, limit });
+        if (cancelled) return;
+        setItems(data.items); setTotal(data.total);
+      } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
   }, [token, page]);
-
-  useEffect(() => { void reload(); }, [reload]);
   const pageCount = Math.max(1, Math.ceil(total / limit));
 
   const totalRevenue = items.reduce((acc, p) => acc + p.amountCents, 0);
@@ -81,7 +84,7 @@ export default function AdminPaymentsPage() {
               {items.length === 0 && <tr><td colSpan={7}><Empty message="Aucun paiement enregistré." /></td></tr>}
             </tbody>
           </AdminTable>
-          <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+          <Pagination page={page} pageCount={pageCount} onChange={(p) => { setLoading(true); setError(null); setPage(p); }} />
         </>
       )}
     </div>

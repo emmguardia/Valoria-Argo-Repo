@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pencil, Trash2, Plus, Save } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { adminApi, type AdminProduct, type AdminProductInput } from '../../lib/adminApi';
@@ -31,16 +31,23 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState<AdminProductInput>(emptyForm);
   const [busy, setBusy] = useState(false);
 
-  const reload = useCallback(async () => {
-    try {
-      setLoading(true); setError(null);
-      const { items } = await adminApi.listProducts(token);
-      setProducts(items);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
-    finally { setLoading(false); }
-  }, [token]);
+  // Chargement fait dans l'effet lui-même (react-hooks/set-state-in-effect).
+  // `reload` le relance via `refreshKey` après une action admin.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const reload = () => { setLoading(true); setError(null); setRefreshKey((k) => k + 1); };
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { items } = await adminApi.listProducts(token);
+        if (cancelled) return;
+        setProducts(items);
+      } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [token, refreshKey]);
 
   const openNew = () => { setEditing('new'); setForm(emptyForm); };
   const openEdit = (p: AdminProduct) => {
@@ -64,14 +71,14 @@ export default function AdminProductsPage() {
       if (editing === 'new') await adminApi.createProduct(token, payload);
       else if (editing) await adminApi.updateProduct(token, editing.id, payload);
       close();
-      await reload();
+      reload();
     } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
     finally { setBusy(false); }
   };
 
   const remove = async (p: AdminProduct) => {
     if (!window.confirm(`Supprimer "${p.name}" ?`)) return;
-    try { await adminApi.deleteProduct(token, p.id); await reload(); }
+    try { await adminApi.deleteProduct(token, p.id); reload(); }
     catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
   };
 

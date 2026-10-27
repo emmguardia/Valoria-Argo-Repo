@@ -27,7 +27,10 @@ export default function VotesPage() {
   const { isLoggedIn, profile, token } = useUser();
   const [sites, setSites] = useState<SiteMeta[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [stats, setStats] = useState<UserVoteStats | null>(null);
+  // Stats rattachées au token qui les a chargées : à la déconnexion (ou au
+  // changement de compte) elles disparaissent sans setState dans l'effet.
+  const [statsEntry, setStatsEntry] = useState<{ token: string; data: UserVoteStats } | null>(null);
+  const stats = isLoggedIn && token && statsEntry?.token === token ? statsEntry.data : null;
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,7 +54,7 @@ export default function VotesPage() {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn || !token) { setStats(null); return; }
+    if (!isLoggedIn || !token) return;
     let cancelled = false;
     (async () => {
       try {
@@ -59,7 +62,7 @@ export default function VotesPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok) setStats(data);
+        if (!cancelled && res.ok) setStatsEntry({ token, data });
       } catch {
         // best-effort, on ignore les erreurs de stats perso
       }
