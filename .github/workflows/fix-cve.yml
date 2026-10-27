@@ -49,9 +49,9 @@ on:
         default: patch-et-mineur
         type: choice
         options:
-          # Respecte les plages semver déclarées dans package.json.
+          # Respecte les plages semver déclarées dans package.json (dependencies seules).
           - patch-et-mineur
-          # `pnpm update --latest` : franchit les versions majeures.
+          # `pnpm update --prod --latest` : franchit les versions majeures.
           - majeures-incluses
           # Ne touche à aucune dépendance : reconstruit seulement les images
           # depuis des bases fraîches. Le bon choix quand la CVE vient d'Alpine,
@@ -165,8 +165,11 @@ jobs:
             exit 0
           fi
 
-          FLAGS=""
-          [ "$STRATEGIE" = "majeures-incluses" ] && FLAGS="--latest"
+          # `--prod` : seules les dependencies (ce que scannent l'audit --prod et
+          # Trivy) sont montées. Les devDependencies (eslint, vite…) restent figées :
+          # une montée d'outil de lint ne doit pas bloquer un correctif de sécurité.
+          FLAGS="--prod"
+          [ "$STRATEGIE" = "majeures-incluses" ] && FLAGS="--prod --latest"
 
           for dir in Backend Frontend; do
             echo "::group::$dir — pnpm update $FLAGS"

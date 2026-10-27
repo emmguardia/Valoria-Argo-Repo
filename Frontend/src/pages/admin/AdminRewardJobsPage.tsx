@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RotateCw } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { adminApi, type AdminRewardJob } from '../../lib/adminApi';
@@ -34,20 +34,27 @@ export default function AdminRewardJobsPage() {
   const [error, setError] = useState<string | null>(null);
   const limit = 30;
 
-  const reload = useCallback(async () => {
-    try {
-      setLoading(true); setError(null);
-      const data = await adminApi.listRewardJobs(token, { page, limit, status: status || undefined });
-      setItems(data.items); setTotal(data.total);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
-    finally { setLoading(false); }
-  }, [token, page, status]);
+  // Chargement fait dans l'effet lui-même (react-hooks/set-state-in-effect).
+  // `reload` le relance via `refreshKey` après une action admin.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const reload = () => { setLoading(true); setError(null); setRefreshKey((k) => k + 1); };
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await adminApi.listRewardJobs(token, { page, limit, status: status || undefined });
+        if (cancelled) return;
+        setItems(data.items); setTotal(data.total);
+      } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [token, page, status, refreshKey]);
 
   const reopen = async (j: AdminRewardJob) => {
     if (!window.confirm(`Rouvrir la livraison #${j.id} pour ${j.mcUsername} ?`)) return;
-    try { await adminApi.reopenRewardJob(token, j.id); await reload(); }
+    try { await adminApi.reopenRewardJob(token, j.id); reload(); }
     catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
   };
 
@@ -61,7 +68,7 @@ export default function AdminRewardJobsPage() {
         right={
           <select
             value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+            onChange={(e) => { setLoading(true); setError(null); setStatus(e.target.value); setPage(1); }}
             className={`${inputCls} w-auto`}
           >
             {STATUSES.map((s) => <option key={s} value={s}>{s || 'Tous les statuts'}</option>)}
@@ -110,7 +117,7 @@ export default function AdminRewardJobsPage() {
               {items.length === 0 && <tr><td colSpan={9}><Empty message="Aucune livraison." /></td></tr>}
             </tbody>
           </AdminTable>
-          <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+          <Pagination page={page} pageCount={pageCount} onChange={(p) => { setLoading(true); setError(null); setPage(p); }} />
         </>
       )}
     </div>

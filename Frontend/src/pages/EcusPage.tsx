@@ -18,11 +18,21 @@ export default function EcusPage() {
   const hasHandledCheckout = useRef(false);
   const { isLoggedIn, createEcusCheckout, confirmEcusCheckout } = useUser();
   const [selectedPack, setSelectedPack] = useState<number | null>(null);
+  // Le retour « annulé » de Stripe est lu dès l'init plutôt que dans l'effet
+  // (react-hooks/set-state-in-effect) ; l'effet ne fait que nettoyer l'URL.
   const [status, setStatus] = useState<{
     tone: 'success' | 'error' | 'info';
     title: string;
     message: string;
-  } | null>(null);
+  } | null>(() =>
+    searchParams.get('checkout') === 'cancel'
+      ? {
+          tone: 'info',
+          title: 'Paiement annulé',
+          message: 'Aucun souci, ton compte n’a pas été débité.',
+        }
+      : null,
+  );
 
   const handleBuyPack = async (ecus: number) => {
     if (!isLoggedIn) {
@@ -56,11 +66,6 @@ export default function EcusPage() {
     hasHandledCheckout.current = true;
 
     if (checkoutState === 'cancel') {
-      setStatus({
-        tone: 'info',
-        title: 'Paiement annulé',
-        message: 'Aucun souci, ton compte n’a pas été débité.',
-      });
       setSearchParams({}, { replace: true });
       return;
     }

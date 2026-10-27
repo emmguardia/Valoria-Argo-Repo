@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ban, CheckCircle, Coins, Shield, ShieldOff, Search } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { adminApi, type AdminUser } from '../../lib/adminApi';
@@ -17,33 +17,40 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const limit = 25;
 
-  const reload = useCallback(async () => {
-    try {
-      setLoading(true); setError(null);
-      const data = await adminApi.listUsers(token, { page, limit, search: search.trim() || undefined });
-      setUsers(data.items); setTotal(data.total);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
-    finally { setLoading(false); }
-  }, [token, page, search]);
+  // Chargement fait dans l'effet lui-même (react-hooks/set-state-in-effect).
+  // `reload` le relance via `refreshKey` après une action admin.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const reload = () => { setLoading(true); setError(null); setRefreshKey((k) => k + 1); };
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await adminApi.listUsers(token, { page, limit, search: search.trim() || undefined });
+        if (cancelled) return;
+        setUsers(data.items); setTotal(data.total);
+      } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [token, page, search, refreshKey]);
 
   const toggleRole = async (u: AdminUser) => {
     const next = u.role === 'admin' ? 'user' : 'admin';
     if (!window.confirm(`Passer ${u.pseudo} en ${next} ?`)) return;
-    try { await adminApi.updateUser(token, u.id, { role: next }); await reload(); }
+    try { await adminApi.updateUser(token, u.id, { role: next }); reload(); }
     catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
   };
 
   const toggleBan = async (u: AdminUser) => {
     if (u.bannedAt) {
       if (!window.confirm(`Débannir ${u.pseudo} ?`)) return;
-      try { await adminApi.updateUser(token, u.id, { banned: false }); await reload(); }
+      try { await adminApi.updateUser(token, u.id, { banned: false }); reload(); }
       catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
     } else {
       const reason = window.prompt(`Raison du bannissement de ${u.pseudo} :`);
       if (!reason) return;
-      try { await adminApi.updateUser(token, u.id, { banned: true, banReason: reason }); await reload(); }
+      try { await adminApi.updateUser(token, u.id, { banned: true, banReason: reason }); reload(); }
       catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
     }
   };
@@ -58,7 +65,7 @@ export default function AdminUsersPage() {
     try {
       const r = await adminApi.adjustEcus(token, u.id, { delta, reason });
       window.alert(`OK — nouveau solde : ${r.balance}`);
-      await reload();
+      reload();
     } catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
   };
 
@@ -75,7 +82,7 @@ export default function AdminUsersPage() {
             <input
               placeholder="pseudo ou email"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => { setLoading(true); setError(null); setSearch(e.target.value); setPage(1); }}
               className="bg-transparent outline-none text-stone-800 text-sm w-56 placeholder:text-stone-400"
             />
           </div>
@@ -125,7 +132,7 @@ export default function AdminUsersPage() {
               {users.length === 0 && <tr><td colSpan={7}><Empty message="Aucun utilisateur trouvé." /></td></tr>}
             </tbody>
           </AdminTable>
-          <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+          <Pagination page={page} pageCount={pageCount} onChange={(p) => { setLoading(true); setError(null); setPage(p); }} />
         </>
       )}
     </div>
