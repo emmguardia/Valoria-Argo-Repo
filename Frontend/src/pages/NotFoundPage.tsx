@@ -8,10 +8,10 @@ export default function NotFoundPage() {
       <SEO title="Page introuvable" description="La page que tu cherches n'existe pas." />
       <div className="grain-overlay" aria-hidden="true" />
       <div className="relative text-center max-w-lg">
-        <p className="text-[var(--gold)]/80 text-6xl sm:text-8xl font-bold mb-4" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+        <p className="text-[var(--gold)]/80 text-6xl sm:text-8xl font-bold mb-4">
           404
         </p>
-        <h1 className="text-2xl sm:text-3xl text-stone-200 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+        <h1 className="text-2xl sm:text-3xl text-stone-200 mb-4">
           Page introuvable
         </h1>
         <p className="text-stone-400 mb-10">
@@ -21,7 +21,7 @@ export default function NotFoundPage() {
           <Link
             to="/"
             className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-[var(--gold)] text-[#0a0908] font-bold hover:bg-[var(--gold-light)] transition-all duration-300"
-            style={{ fontFamily: "'Oswald', sans-serif" }}
+           
           >
             <Home className="w-5 h-5" />
             Accueil
@@ -30,7 +30,7 @@ export default function NotFoundPage() {
             type="button"
             onClick={() => window.history.back()}
             className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border-2 border-[var(--gold)]/50 text-[var(--gold-light)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all duration-300"
-            style={{ fontFamily: "'Playfair Display', serif" }}
+           
           >
             <ArrowLeft className="w-5 h-5" />
             Retour

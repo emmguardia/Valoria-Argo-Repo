@@ -30,7 +30,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-10 h-10 text-red-400" />
             </div>
-            <h1 className="text-2xl sm:text-3xl text-stone-200 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+            <h1 className="text-2xl sm:text-3xl text-stone-200 mb-4">
               Une erreur est survenue
             </h1>
             <p className="text-stone-400 mb-10">
@@ -41,7 +41,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 type="button"
                 onClick={() => window.location.reload()}
                 className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-[var(--gold)] text-[#0a0908] font-bold hover:bg-[var(--gold-light)] transition-all duration-300"
-                style={{ fontFamily: "'Oswald', sans-serif" }}
+               
               >
                 <RefreshCw className="w-5 h-5" />
                 Recharger
@@ -49,7 +49,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               <Link
                 to="/"
                 className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border-2 border-[var(--gold)]/50 text-[var(--gold-light)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all duration-300"
-                style={{ fontFamily: "'Playfair Display', serif" }}
+               
               >
                 Accueil
               </Link>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, Gift, Check, Medal } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Check, ExternalLink } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useUser } from '../context/UserContext';
 
@@ -22,6 +23,13 @@ interface UserVoteStats {
   lastVote: string | null;
   todaySites: string[];
 }
+
+// Podium affiché 2 - 1 - 3, comme sur une vraie estrade
+const PODIUM_STYLE: Record<number, string> = {
+  1: 'h-[6.5rem] bg-or text-encre text-[2.4rem] shadow-[0_4px_0_var(--color-or-fonce)]',
+  2: 'h-[4.6rem] bg-brume-300 text-nuit-700 text-3xl shadow-[0_4px_0_var(--color-brume-600)]',
+  3: 'h-14 bg-[#d9875a] text-cuir text-[1.6rem] shadow-[0_4px_0_var(--color-brique)]',
+};
 
 export default function VotesPage() {
   const { isLoggedIn, profile, token } = useUser();
@@ -71,115 +79,162 @@ export default function VotesPage() {
   }, [isLoggedIn, token]);
 
   const todaySites = stats?.todaySites ?? [];
+  const activeSites = sites.filter((s) => s.enabled && s.voteUrl);
+  const doneToday = activeSites.filter((s) => todaySites.includes(s.key)).length;
+  const progress = activeSites.length ? Math.round((doneToday / activeSites.length) * 100) : 0;
+  const podium = [2, 1, 3]
+    .map((rank) => leaderboard.find((e) => e.rank === rank))
+    .filter((e): e is LeaderboardEntry => Boolean(e));
+  const rest = leaderboard.filter((e) => e.rank > 3).slice(0, 7);
 
   return (
-    <div className="valoria-page-shell">
-      <SEO title="Vote" description="Vote pour Valoria et grimpe dans le classement mensuel." keywords="vote, Valoria, Minecraft" url="/votes" />
-      <section className="valoria-page-hero">
-        <div className="valoria-page-container">
-          <p className="valoria-page-kicker">Vote</p>
-          <h1 className="valoria-page-title">Vote pour Valoria</h1>
-          <p className="valoria-page-subtitle">Chaque vote te donne une récompense in-game (/fvote) et te fait grimper dans le classement mensuel.</p>
+    <>
+      <SEO title="Vote" description="Vote pour Valoria : une récompense en jeu par vote et une place au classement du mois." keywords="vote, Valoria, Minecraft" url="/votes" />
+
+      <section className="bandeau-nuit-sombre -mt-24 px-5 pb-14 pt-36">
+        <div className="mx-auto max-w-[75rem]">
+          <p className="kicker">Vote</p>
+          <h1 className="mt-2.5 text-[clamp(2.5rem,5.5vw,4.25rem)] leading-[1.02] text-white [text-shadow:0_4px_0_#0a1228,0_10px_30px_rgb(0_0_0/0.5)]">
+            Fais résonner ta bannière
+          </h1>
+          <p className="mt-3.5 max-w-xl text-lg font-semibold leading-relaxed text-brume-200">
+            Chaque vote te donne une récompense en jeu (/fvote) et te fait grimper au classement du mois. Un vote par site toutes les 24 h.
+          </p>
         </div>
       </section>
 
-      <section className="valoria-page-section">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="valoria-card p-8">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-4 bg-[#f59e0b]/20 rounded-xl">
-                  <Gift className="w-8 h-8 text-[#f59e0b]" />
-                </div>
-                <div>
-                  <h2 className="font-display text-xl text-gray-900">Comment ça marche</h2>
-                  <p className="valoria-text-muted text-sm">Vote avec ton pseudo Minecraft (1 fois par jour par site).</p>
-                </div>
-              </div>
-              {isLoggedIn && profile && (
-                <div className="p-4 bg-amber-50 rounded-xl text-sm text-stone-700">
-                  <strong>Connecté en {profile.pseudo}.</strong> Utilise ce pseudo exact sur les sites de vote, sinon la récompense ne sera pas attribuée.
+      <div className="mx-auto flex max-w-[75rem] flex-wrap items-start gap-7 px-5 pb-24 pt-5">
+        <div className="flex min-w-0 flex-[999_1_35rem] flex-col gap-5">
+          {/* Progression perso */}
+          <div className="rounded-[1.375rem] border-2 border-or/40 bg-nuit-800 p-6 shadow-[0_6px_0_#091127]">
+            {isLoggedIn && profile ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-brume-600">Tes votes du jour</p>
+                    <p className="mt-1 font-display text-[2.1rem] text-white">
+                      {activeSites.length > 0 && doneToday === activeSites.length
+                        ? 'Tous faits, bravo !'
+                        : `${doneToday} / ${activeSites.length} sites`}
+                    </p>
+                  </div>
                   {stats && (
-                    <div className="mt-2 text-stone-600">
-                      Ce mois-ci : <strong className="text-amber-700">{stats.totalVotesMonth}</strong> vote{stats.totalVotesMonth > 1 ? 's' : ''}.
+                    <div className="text-right">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-brume-600">Ce mois-ci</p>
+                      <p className="mt-1 font-display text-[2.1rem] text-or">
+                        {stats.totalVotesMonth} vote{stats.totalVotesMonth > 1 ? 's' : ''}
+                      </p>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-
-            <h2 className="font-display text-2xl text-gray-900">Sites de vote</h2>
-            {loading ? (
-              <p className="text-stone-500">Chargement…</p>
+                <div
+                  role="progressbar"
+                  aria-label="Votes du jour"
+                  aria-valuemin={0}
+                  aria-valuemax={activeSites.length}
+                  aria-valuenow={doneToday}
+                  className="mt-4 h-[18px] overflow-hidden rounded-[10px] border-2 border-ciel/20 bg-nuit-900"
+                >
+                  <div className="h-full rounded-md bg-or transition-[width] duration-300" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="mt-3.5 text-[15px] leading-relaxed text-brume-400">
+                  Connecté en <strong className="text-white">{profile.pseudo}</strong>. Utilise exactement ce pseudo sur les sites de vote, sinon la récompense n'arrive pas.
+                </p>
+              </>
             ) : (
-              <div className="space-y-3">
-                {sites.map((site, i) => {
-                  const votedToday = todaySites.includes(site.key);
-                  return (
-                    <a
-                      key={site.key}
-                      href={site.voteUrl ?? '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex items-center justify-between p-5 rounded-2xl border transition-all duration-200 group ${
-                        site.voteUrl
-                          ? 'bg-white border-gray-100 hover:border-[#f59e0b]/40 hover:shadow-lg hover:shadow-amber-500/5'
-                          : 'bg-stone-50 border-stone-200 opacity-60 cursor-not-allowed pointer-events-none'
-                      }`}
-                      onClick={(e) => { if (!site.voteUrl) e.preventDefault(); }}
-                    >
-                      <div className="flex items-center gap-4">
-                        <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-[#1e3a5f] text-white font-bold">
-                          {i + 1}
-                        </span>
-                        <div>
-                          <span className="font-medium text-gray-900 group-hover:text-[#1e3a5f]">{site.name}</span>
-                          <span className="block text-sm text-[#f59e0b] font-medium">
-                            {votedToday ? 'Déjà voté aujourd\'hui' : site.enabled ? '1 vote / 24h' : 'Bientôt'}
-                          </span>
-                        </div>
-                      </div>
-                      {votedToday ? (
-                        <Check className="w-5 h-5 text-emerald-500" />
-                      ) : (
-                        <ExternalLink className="w-5 h-5 text-gray-400 group-hover:text-[#1e3a5f]" />
-                      )}
-                    </a>
-                  );
-                })}
-                {sites.length === 0 && <p className="text-stone-500">Aucun site de vote configuré pour le moment.</p>}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="max-w-md text-[15px] leading-relaxed text-brume-300">
+                  Vote avec ton pseudo Minecraft, une fois par jour sur chaque site. Connecte-toi pour suivre tes votes du jour et du mois.
+                </p>
+                <Link to="/connexion" className="btn-3d btn-or">Connexion</Link>
               </div>
             )}
           </div>
 
-          <aside className="valoria-card p-6 h-fit">
-            <div className="flex items-center gap-3 mb-4">
-              <Medal className="w-6 h-6 text-[#f59e0b]" />
-              <h3 className="font-display text-lg text-gray-900">Top voteurs du mois</h3>
-            </div>
-            {leaderboard.length === 0 ? (
-              <p className="text-sm text-stone-500">Aucun vote ce mois-ci pour le moment.</p>
-            ) : (
-              <ol className="space-y-2">
-                {leaderboard.slice(0, 10).map((e) => (
-                  <li key={e.mcUsername} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        e.rank === 1 ? 'bg-amber-400 text-stone-900' :
-                        e.rank === 2 ? 'bg-stone-300 text-stone-900' :
-                        e.rank === 3 ? 'bg-amber-700/70 text-white' :
-                        'bg-stone-100 text-stone-600'
-                      }`}>{e.rank}</span>
-                      <span className="font-medium text-gray-800">{e.mcUsername}</span>
+          <h2 className="titre-section mt-3 text-[2.1rem]">Sites de vote</h2>
+
+          {loading ? (
+            <p className="font-bold text-brume-500">Chargement…</p>
+          ) : sites.length === 0 ? (
+            <p className="carte px-6 py-10 text-center font-bold text-brume-500">Aucun site de vote configuré pour le moment.</p>
+          ) : (
+            <ol className="flex flex-col gap-3.5">
+              {sites.map((site, i) => {
+                const votedToday = todaySites.includes(site.key);
+                const available = site.enabled && site.voteUrl;
+                return (
+                  <li
+                    key={site.key}
+                    className={`flex flex-wrap items-center gap-4 rounded-[1.125rem] border-2 bg-nuit-800 px-4.5 py-4 ${
+                      votedToday ? 'border-emerald-400/35' : 'border-ciel/14'
+                    } ${available ? '' : 'opacity-60'}`}
+                  >
+                    <span className="flex h-13 w-13 flex-none items-center justify-center rounded-2xl bg-nuit-700 font-display text-[1.6rem] text-or">
+                      {i + 1}
                     </span>
-                    <span className="text-amber-700 font-semibold">{e.totalVotes}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-display text-[1.3rem] text-white">{site.name}</p>
+                      <p className={`mt-0.5 text-sm font-extrabold ${votedToday ? 'text-emerald-300' : 'text-brume-600'}`}>
+                        {votedToday ? 'Déjà voté aujourd’hui' : available ? '1 vote toutes les 24 h' : 'Bientôt'}
+                      </p>
+                    </div>
+                    {votedToday ? (
+                      <span className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-400/14 px-4 font-black text-emerald-300">
+                        <Check className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
+                        Voté
+                      </span>
+                    ) : available ? (
+                      <a
+                        href={site.voteUrl ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-3d btn-or min-h-12 px-5 text-lg"
+                      >
+                        Voter
+                        <span className="sr-only"> sur {site.name} (nouvel onglet)</span>
+                        <ExternalLink className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
+                      </a>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+
+        {/* Classement du mois */}
+        <aside aria-labelledby="top-voteurs" className="carte min-w-0 flex-[1_1_20rem] p-6">
+          <h2 id="top-voteurs" className="text-[1.625rem] text-white">Top voteurs du mois</h2>
+          {leaderboard.length === 0 ? (
+            <p className="mt-4 text-[15px] text-brume-500">Aucun vote ce mois-ci pour le moment. La première place est libre.</p>
+          ) : (
+            <>
+              <ol className="mt-6 grid grid-cols-3 items-end gap-2 text-center">
+                {podium.map((e) => (
+                  <li key={e.mcUsername} className="min-w-0">
+                    <p className="truncate text-sm font-extrabold text-brume-100">{e.mcUsername}</p>
+                    <p className="text-xs font-black text-or">{e.totalVotes} votes</p>
+                    <div className={`mt-2 flex items-center justify-center rounded-t-xl rounded-b font-display ${PODIUM_STYLE[e.rank]}`}>
+                      {e.rank}
+                    </div>
                   </li>
                 ))}
               </ol>
-            )}
-          </aside>
-        </div>
-      </section>
-    </div>
+              {rest.length > 0 && (
+                <ol className="mt-5 flex flex-col gap-1.5">
+                  {rest.map((e) => (
+                    <li key={e.mcUsername} className="flex min-h-11 items-center gap-3 rounded-xl bg-nuit-850 px-3">
+                      <span className="w-7 font-display text-lg text-brume-600">{e.rank}</span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-extrabold text-brume-200">{e.mcUsername}</span>
+                      <span className="text-[15px] font-black text-or">{e.totalVotes}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+        </aside>
+      </div>
+    </>
   );
 }

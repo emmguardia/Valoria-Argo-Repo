@@ -1,39 +1,44 @@
-import { Coins, User, Menu, MessageCircle, Shield } from 'lucide-react';
+import { Coins, LogOut, Menu, MessageCircle, Shield, User, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
+import { DISCORD_URL } from '../data/site';
 
 const navLinks = [
-  { to: '/', label: 'Accueil' },
-  { to: '/boutique', label: 'Boutique' },
-  { to: '/votes', label: 'Vote' },
-  { to: '/classement', label: 'Classement' },
   { to: '/wiki', label: 'Wiki' },
+  { to: '/classement', label: 'Classement' },
+  { to: '/votes', label: 'Vote' },
   { to: '/regles', label: 'Règles' },
 ];
 
-const DISCORD_URL = 'https://discord.gg/Dvh7Pm53Yd';
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `rounded-lg px-3 py-2 font-extrabold transition-colors ${
+    isActive ? 'text-white underline decoration-or decoration-[3px] underline-offset-8' : 'text-brume-300 hover:text-white'
+  }`;
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { isLoggedIn, ecus, profile, logout } = useUser();
+  const { isLoggedIn, ecus, logout, profile } = useUser();
   const isAdmin = profile?.role === 'admin';
+  const onBoutique = location.pathname === '/boutique';
+
+  // Le menu mobile se referme à chaque changement de page
+  const [menuPath, setMenuPath] = useState(location.pathname);
+  if (menuPath !== location.pathname) {
+    setMenuPath(location.pathname);
+    setIsMenuOpen(false);
+  }
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 10);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const allowTransparentTop = location.pathname === '/';
-  const isSolid = !allowTransparentTop || isScrolled || isMenuOpen;
-  const topTextClass = isSolid ? 'text-stone-600' : 'text-white drop-shadow';
-  const topTextHoverClass = isSolid ? 'hover:text-stone-800 hover:bg-amber-50/80' : 'hover:text-white hover:bg-white/10';
-  const topTextStrongClass = isSolid ? 'text-stone-800' : 'text-white drop-shadow';
+    if (!isMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isMenuOpen]);
 
   const handleLogout = () => {
     logout();
@@ -42,143 +47,137 @@ export default function Header() {
   };
 
   return (
-    <header
-      className={[
-        'fixed top-0 left-0 right-0 z-50 transition-colors duration-300',
-        isSolid
-          ? 'bg-[#f5f0e1]/98 backdrop-blur-xl border-b border-amber-200/60 shadow-sm'
-          : 'bg-transparent border-b border-transparent shadow-none backdrop-blur-0',
-      ].join(' ')}
-    >
-      <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-24 min-h-[88px]">
-          <Link to="/" className="flex items-center group py-4">
-            <img src="/images/icon.png" alt="Valoria Realm" className="h-20 w-20 sm:h-24 sm:w-24 object-contain transition-transform group-hover:scale-105" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+    <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
+      <div className="mx-auto max-w-[75rem] rounded-2xl border border-ciel/20 bg-nuit-900/80 shadow-[0_10px_30px_rgb(0_0_0/0.3)] backdrop-blur-md">
+        <div className="flex min-h-16 items-center justify-between gap-4 px-3 py-2">
+          <Link to="/" className="flex items-center gap-2.5 rounded-lg">
+            <img src="/images/icon.webp" alt="" width={40} height={40} className="h-10 w-10" />
+            <span className="font-display text-2xl tracking-wide text-or">Valoria</span>
           </Link>
-          <nav className="hidden md:flex items-center gap-1">
+
+          <nav aria-label="Navigation principale" className="hidden items-center gap-2 text-[15px] lg:flex">
             {navLinks.map(({ to, label }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`text-lg sm:text-xl font-medium transition-all duration-300 px-6 py-5 rounded-lg ${
-                  location.pathname === to
-                    ? `${topTextStrongClass} ${isSolid ? 'bg-amber-100/70' : 'bg-white/10'}`
-                    : `${topTextClass} ${topTextHoverClass}`
-                }`}
-              >
+              <NavLink key={to} to={to} className={navLinkClass}>
                 {label}
-              </Link>
+              </NavLink>
             ))}
           </nav>
+
           <div className="flex items-center gap-2">
             <a
               href={DISCORD_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className={`hidden sm:flex items-center gap-3 px-6 py-4 rounded-lg transition-all duration-300 text-lg sm:text-xl ${topTextClass} ${topTextHoverClass}`}
+              aria-label="Rejoindre le Discord (nouvel onglet)"
+              className="hidden h-11 w-11 items-center justify-center rounded-xl text-brume-300 transition-colors hover:bg-ciel/10 hover:text-white sm:flex"
             >
-              <MessageCircle className="w-6 h-6" />
-              <span>Discord</span>
+              <MessageCircle className="h-5 w-5" aria-hidden="true" />
             </a>
             <Link
-              to="/ecus"
-              className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-100/80 border border-amber-300/60 text-stone-800 font-semibold hover:bg-amber-200/80 transition-all duration-300 text-sm sm:text-base"
+              to="/boutique"
+              aria-current={onBoutique ? 'page' : undefined}
+              className={`hidden h-11 items-center rounded-xl px-4 text-[15px] font-black transition-colors sm:inline-flex ${
+                onBoutique ? 'bg-or text-encre' : 'border-2 border-or/60 text-or hover:bg-or/10'
+              }`}
             >
-              <Coins className="w-5 h-5 text-amber-600" />
-              <span className="whitespace-nowrap">{isLoggedIn ? `${ecus} Écus` : 'Acheter des Écus'}</span>
-            </Link>
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 font-semibold hover:bg-amber-500/25 transition-all text-sm sm:text-base`}
-              >
-                <Shield className="w-5 h-5" />
-                <span>Admin</span>
-              </Link>
-            )}
-            <Link
-              to={isLoggedIn ? '/profile' : '/connexion'}
-              className={`flex items-center gap-3 px-6 py-4 rounded-lg transition-all duration-300 text-lg sm:text-xl ${topTextClass} ${topTextHoverClass}`}
-            >
-              <User className="w-6 h-6" />
-              <span className="hidden sm:inline">{isLoggedIn ? 'Profil' : 'Connexion'}</span>
+              Boutique
             </Link>
             {isLoggedIn && (
-              <button
-                type="button"
-                onClick={handleLogout}
-                className={`flex items-center gap-3 px-6 py-4 rounded-lg transition-all duration-300 text-lg sm:text-xl ${topTextClass} ${topTextHoverClass}`}
-              >
-                <span className="hidden sm:inline">Déconnexion</span>
-              </button>
-            )}
-            <button
-              className={`md:hidden p-5 rounded-lg ${topTextClass} ${topTextHoverClass}`}
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <Menu className="w-7 h-7" />
-            </button>
-          </div>
-        </div>
-        {isMenuOpen && (
-          <nav className="md:hidden py-4 border-t border-amber-200/60 flex flex-col gap-1 animate-slideDown">
-            {navLinks.map(({ to, label }) => (
               <Link
-                key={to}
-                to={to}
-                onClick={() => setIsMenuOpen(false)}
-                className={`py-5 px-6 rounded-lg text-lg font-medium transition-colors ${
-                  location.pathname === to ? 'text-stone-800 bg-amber-100/70' : 'text-stone-600'
-                }`}
+                to="/ecus"
+                className="hidden h-11 items-center gap-2 rounded-xl bg-nuit-800 px-3 text-[15px] font-extrabold text-or transition-colors hover:bg-nuit-700 md:inline-flex"
               >
-                {label}
+                <Coins className="h-5 w-5" aria-hidden="true" />
+                <span className="whitespace-nowrap">{ecus} Écus</span>
               </Link>
-            ))}
-            <Link
-              to="/ecus"
-              onClick={() => setIsMenuOpen(false)}
-              className="flex items-center gap-3 py-5 px-6 text-stone-600 rounded-lg text-lg font-semibold"
-            >
-              <Coins className="w-5 h-5" />
-              <span className="whitespace-nowrap">{isLoggedIn ? `${ecus} Écus` : 'Acheter des Écus'}</span>
-            </Link>
+            )}
             {isAdmin && (
               <Link
                 to="/admin"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 py-5 px-6 text-amber-700 rounded-lg text-lg font-semibold"
+                className="hidden h-11 items-center gap-2 rounded-xl border border-or/40 px-3 text-[15px] font-extrabold text-or hover:bg-or/10 lg:inline-flex"
               >
-                <Shield className="w-5 h-5" />
+                <Shield className="h-5 w-5" aria-hidden="true" />
                 Admin
               </Link>
             )}
             <Link
               to={isLoggedIn ? '/profile' : '/connexion'}
-              onClick={() => setIsMenuOpen(false)}
-              className="flex items-center gap-3 py-5 px-6 text-stone-600 rounded-lg text-lg font-medium"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-ciel/12 px-4 text-[15px] font-extrabold text-brume-100 transition-colors hover:bg-ciel/20"
             >
-              <User className="w-5 h-5" />
-              {isLoggedIn ? 'Profil' : 'Connexion'}
+              <User className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" />
+              <span className="hidden sm:inline">{isLoggedIn ? (profile?.pseudo ?? 'Profil') : 'Connexion'}</span>
+              <span className="sm:hidden">{isLoggedIn ? 'Profil' : 'Connexion'}</span>
             </Link>
             {isLoggedIn && (
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex items-center gap-3 py-5 px-6 text-stone-600 rounded-lg text-lg font-medium"
+                aria-label="Se déconnecter"
+                className="hidden h-11 w-11 items-center justify-center rounded-xl text-brume-300 transition-colors hover:bg-ciel/10 hover:text-white lg:flex"
               >
-                Déconnexion
+                <LogOut className="h-5 w-5" aria-hidden="true" />
               </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((open) => !open)}
+              aria-expanded={isMenuOpen}
+              aria-controls="menu-mobile"
+              aria-label={isMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-brume-100 hover:bg-ciel/10 lg:hidden"
+            >
+              {isMenuOpen ? <X className="h-6 w-6" aria-hidden="true" /> : <Menu className="h-6 w-6" aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
+
+        {isMenuOpen && (
+          <nav
+            id="menu-mobile"
+            aria-label="Menu mobile"
+            className="animate-slideDown flex flex-col gap-1 border-t border-ciel/15 p-3 text-lg lg:hidden"
+          >
+            {[{ to: '/', label: 'Accueil' }, ...navLinks, { to: '/boutique', label: 'Boutique' }].map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  `rounded-xl px-4 py-3 font-extrabold ${isActive ? 'bg-nuit-800 text-or' : 'text-brume-200 hover:bg-nuit-800'}`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+            <Link to="/ecus" className="flex items-center gap-3 rounded-xl px-4 py-3 font-extrabold text-or hover:bg-nuit-800">
+              <Coins className="h-5 w-5" aria-hidden="true" />
+              {isLoggedIn ? `${ecus} Écus` : 'Acheter des Écus'}
+            </Link>
+            {isAdmin && (
+              <Link to="/admin" className="flex items-center gap-3 rounded-xl px-4 py-3 font-extrabold text-or hover:bg-nuit-800">
+                <Shield className="h-5 w-5" aria-hidden="true" />
+                Admin
+              </Link>
             )}
             <a
               href={DISCORD_URL}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => setIsMenuOpen(false)}
-              className="flex items-center gap-3 py-5 px-6 text-stone-600 rounded-lg text-lg"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 font-extrabold text-brume-200 hover:bg-nuit-800"
             >
-              <MessageCircle className="w-6 h-6" />
+              <MessageCircle className="h-5 w-5" aria-hidden="true" />
               Discord
             </a>
+            {isLoggedIn && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-left font-extrabold text-brume-200 hover:bg-nuit-800"
+              >
+                <LogOut className="h-5 w-5" aria-hidden="true" />
+                Déconnexion
+              </button>
+            )}
           </nav>
         )}
       </div>

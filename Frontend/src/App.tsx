@@ -37,7 +37,7 @@ function PageLoader() {
     <div className="min-h-[50vh] flex items-center justify-center">
       <div className="animate-pulse flex flex-col items-center gap-4">
         <div className="w-12 h-12 rounded-full border-4 border-[var(--gold)]/30 border-t-[var(--gold)] animate-spin" />
-        <p className="text-stone-500">Chargement...</p>
+        <p className="text-brume-500">Chargement...</p>
       </div>
     </div>
   );
@@ -46,8 +46,7 @@ function PageLoader() {
 function App() {
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-[#0a0908]">
-        <div className="grain-overlay" aria-hidden="true" />
+      <div className="min-h-screen bg-nuit-900">
         <ScrollToTop />
         <Header />
         <div className="pt-24">
