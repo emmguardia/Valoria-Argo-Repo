@@ -5,27 +5,27 @@ const WIKI_SECTIONS = [
   {
     icon: Swords,
     title: "L'Appel des Nations",
-    content: "Le continent n'appartient à personne, mais tous se battent pour l'arracher à l'oubli. Valoria est régie par un équilibre fragile : neuf lignées dominantes, capables d'accueillir chacune les plus puissantes factions de guerriers. Votre but : fonder votre village, protéger vos frontières et grimper les échelons pour que le nom de votre bannière résonne lors du jugement mensuel des vainqueurs.",
+    content: "Ta faction rejoint l'une des neuf nations, et tous ses membres profitent de son bonus permanent. Une nation accueille jusqu'à 10 factions.\n\nFrancs : +4 % de dégâts\nAnglo-Saxons : +8 % de dégâts à l'arc\nVikings : +9 % de vitesse\nChine médiévale : Célérité I et vision nocturne\nBohémiens : -20 % de dégâts subis\nBretons : une potion d'invisibilité toutes les 48 h\nAragonais : +12 % de recul et résistance au feu\nTurcs seldjoukides : Chance IV et +8 % de dégâts critiques\nByzantins : -25 % de dégâts d'explosion",
   },
   {
     icon: Hammer,
     title: "L'Héritage de la Forge et des Champs",
-    content: "Les Outils de Maître : Marteau 3x3 pour éventrer la roche, Bâton de vente pour échanger vos ressources, Houes de farm pour dompter la terre.\n\nL'Armure de Farm : Célérité et Vision Nocturne (craft).\n\nLes Parures de Guerre : Combattant (vitesse d'attaque), Guerrier (+2 cœurs), Souverain (fusion des deux).",
+    content: "Les métiers : bûcheron, chasseur, fermier, mineur et pêcheur, chacun jusqu'au niveau 100.\n\nLe bâton de vente revend le contenu d'un coffre d'un seul clic.\n\nLes armures de set : Farm (Vitesse II et vision nocturne), Combattant (Célérité II), Guerrier (+2 cœurs), Souverain (+2 cœurs et Célérité II).",
   },
   {
     icon: Coins,
-    title: 'La Loi du Commerce Brut',
-    content: "À Valoria, l'Hôtel des Ventes n'existe pas. Chaque échange est une épreuve de force. Les trocs se font face à face, dans l'ombre des ruelles ou au cœur des plaines. Ici, un coffre plein ne se vend pas, il se défend.",
+    title: 'Le Commerce',
+    content: "Vends et achète entre joueurs à l'Hôtel des Ventes (/ah), ou passe par la boutique du serveur (/shop). Le bâton de vente revend directement le contenu de tes coffres.",
   },
   {
     icon: Sparkles,
-    title: 'Les Failles et le Chaos',
-    content: "La Dimension Éphémère : une faille s'ouvre rarement vers un lieu oublié. Traque des créatures relâchant des reliques mystérieuses.\n\nL'Épreuve du FFA : arène où chaque guerrier devient un inconnu. Seul le dernier survivant réclame la gloire.",
+    title: 'Les Failles et le Chaos (bientôt)',
+    content: "La Dimension Éphémère : une faille vers un lieu oublié, ses créatures et ses reliques.\n\nLes KOTH et l'arène FFA : se disputer une zone, ou survivre jusqu'au dernier.\n\nCes modes sont en préparation.",
   },
   {
     icon: Fish,
-    title: 'Le Lien avec les Familiers',
-    content: "Dans les eaux de Valoria se cachent des poissons rares. La pêche est vitale : c'est le seul moyen de nourrir vos Familiers, ces compagnons qui vous épaulent. Sans ces prises, vos alliés ne pourront pas regagner leurs forces.",
+    title: 'Le Lien avec les Familiers (bientôt)',
+    content: "Des poissons rares à pêcher pour nourrir des familiers qui combattent à tes côtés. En préparation.",
   },
   {
     icon: Book,
@@ -39,7 +39,7 @@ export default function WikiPage() {
     <div className="valoria-page-shell">
       <SEO
         title="Wiki"
-        description="Wiki Valoria : Chroniques, Nations, Forge, Commerce, Failles, Familiers. Tout pour bien démarrer."
+        description="Wiki Valoria : les 9 nations et leurs bonus, les métiers, les armures, le commerce et les commandes utiles."
         keywords="wiki, Valoria, Minecraft, guide, Chroniques"
         url="/wiki"
       />
