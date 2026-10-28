@@ -3,14 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Coins, Loader2, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useUser } from '../context/UserContext';
-
-const ECUS_PACKS = [
-  { ecus: 50, price: '0,99 €', popular: false },
-  { ecus: 150, price: '2,49 €', popular: true, bonus: '+20%' },
-  { ecus: 350, price: '4,99 €', popular: false, bonus: '+40%' },
-  { ecus: 750, price: '9,99 €', popular: false, bonus: '+50%' },
-  { ecus: 1650, price: '19,99 €', popular: false, bonus: '+65%' },
-];
+import { ECUS_PACKS } from '../data/ecusPacks';
 
 export default function EcusPage() {
   const navigate = useNavigate();

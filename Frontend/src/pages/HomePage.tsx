@@ -1,38 +1,97 @@
 import { Link } from 'react-router-dom';
+import { Fish, Flag, Hammer, MessageCircle, Plus, Shield, Sparkles, Swords, type LucideIcon } from 'lucide-react';
 import SEO from '../components/SEO';
-import {
-  Copy,
-  ArrowRight,
-  ChevronDown,
-  Swords,
-  Hammer,
-  Shield,
-  Coins,
-  Sparkles,
-  Fish,
-  MessageCircle,
-  ExternalLink,
-} from 'lucide-react';
-import { useState } from 'react';
+import CopyIpButton from '../components/CopyIpButton';
 import { useInView } from '../hooks/useInView';
+import { DISCORD_URL, MC_VERSION, SERVER_IP } from '../data/site';
 
-const SERVER_IP = 'play.valoria.fr';
-const DISCORD_URL = 'https://discord.gg/Dvh7Pm53Yd';
+const STATS = [
+  { value: '9', label: 'Nations' },
+  { value: '5', label: 'Métiers' },
+  { value: '20', label: 'Poissons rares' },
+  { value: '5', label: 'Familiers' },
+  { value: '0', label: 'Hôtel des ventes' },
+];
 
-function SectionReveal({
-  children,
-  className = '',
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
+interface Pilier {
+  tag: string;
+  title: string;
+  text: string;
+  icon: LucideIcon;
+  /** Capture en jeu ; tant qu'elle manque, l'icône prend la place */
+  image?: string;
+}
+
+const PILIERS: Pilier[] = [
+  {
+    tag: '9 nations',
+    title: "L'Appel des Nations",
+    text: 'Rejoins une lignée, fonde ton village, protège tes frontières. Ta bannière se joue au jugement mensuel des vainqueurs.',
+    icon: Flag,
+  },
+  {
+    tag: '5 métiers · rangs',
+    title: 'Grimpe les échelons',
+    text: 'Monte tes métiers et tes rangs pour débloquer le monde de minage et le Nether. Outils de maître : marteau 3x3, houes de farm, bâton de vente.',
+    icon: Hammer,
+  },
+  {
+    tag: 'Armures',
+    title: 'Les Parures de Guerre',
+    text: "Combattant pour la vitesse d'attaque, Guerrier pour deux cœurs de plus, Souverain pour les deux. L'armure de farm, elle, se crafte.",
+    icon: Shield,
+  },
+  {
+    tag: 'Pêche · familiers',
+    title: 'Pêche pour tes alliés',
+    text: "20 poissons rares se cachent dans les eaux de Valoria. C'est la seule nourriture de tes familiers : sans tes prises, ils ne regagnent pas leurs forces.",
+    icon: Fish,
+  },
+  {
+    tag: 'Failles · boss',
+    title: 'La Dimension Éphémère',
+    text: "Une faille s'ouvre rarement vers un lieu oublié. Ses créatures relâchent des reliques introuvables sur les terres connues.",
+    icon: Sparkles,
+  },
+  {
+    tag: 'Events · PvP',
+    title: 'KOTH, Totem et FFA',
+    text: "Airdrops au spawn, arène FFA où les noms s'effacent, classement PvP mensuel. Seul le dernier debout réclame la gloire.",
+    icon: Swords,
+  },
+];
+
+const ETAPES = [
+  { title: `Lance Minecraft Java ${MC_VERSION}`, text: `Depuis le launcher officiel, choisis la version ${MC_VERSION}.` },
+  { title: 'Multijoueur, puis Ajouter', text: 'Clique sur Multijoueur, puis sur Ajouter un serveur.' },
+  { title: "Colle l'adresse et entre", text: `Adresse : ${SERVER_IP}. Enregistre, puis rejoins le royaume.` },
+];
+
+const FAQ = [
+  {
+    q: 'Le serveur est-il gratuit ?',
+    a: 'Oui. La boutique propose des grades et des cosmétiques, payés en Écus.',
+  },
+  {
+    q: 'Quelle différence entre Écus et votes ?',
+    a: "Les votes se gagnent en votant une fois par jour sur chaque site partenaire. Les Écus s'achètent sur le site et servent dans la boutique.",
+  },
+  {
+    q: "Pourquoi il n'y a pas d'Hôtel des Ventes ?",
+    a: 'Parce que chaque échange doit être une épreuve. Le troc se fait face à face, et un coffre plein se défend.',
+  },
+  {
+    q: 'Comment nourrir mes familiers ?',
+    a: 'Uniquement avec les poissons rares pêchés dans les eaux de Valoria.',
+  },
+];
+
+function SectionReveal({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const { ref, isInView } = useInView();
   return (
     <div
       ref={ref}
-      className={`transition-all duration-700 ease-out ${className}`}
+      className={`transition-all duration-700 ease-out motion-reduce:transition-none ${className}`}
       style={{
         opacity: isInView ? 1 : 0,
         transform: isInView ? 'translateY(0)' : 'translateY(24px)',
@@ -44,442 +103,175 @@ function SectionReveal({
   );
 }
 
+function DiscordButton({ label = 'Rejoindre le Discord' }: { label?: string }) {
+  return (
+    <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="btn-3d btn-nuit">
+      <MessageCircle className="h-5 w-5" aria-hidden="true" />
+      {label}
+    </a>
+  );
+}
+
 export default function HomePage() {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyIp = async () => {
-    try {
-      await navigator.clipboard.writeText(SERVER_IP);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
-  };
-
-  const scrollToNext = () => {
-    document.getElementById('chroniques')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <>
       <SEO
-        title="Valoria Realm"
-        description="Serveur Minecraft PvP Faction 1.21.4, thème médiéval. Rejoins les neuf Grandes Nations, forge ton destin et domine le royaume."
-        keywords="Valoria, Minecraft, serveur, PvP, Faction, 1.21.4, médiéval, factions"
+        title="Valoria — Serveur Minecraft faction médiéval"
+        description={`Serveur Minecraft faction médiéval ${MC_VERSION}. Rejoins l'une des neuf nations, maîtrise tes métiers, forge ton armure et défends ton coffre.`}
+        keywords="Valoria, Minecraft, serveur, faction, PvP, médiéval, nations, métiers"
         url="/"
       />
-      {/* Hero - tout sur le background */}
-      <section className="relative min-h-screen overflow-hidden -mt-24">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: 'url(/images/background.png)' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0a0908]/30 via-transparent to-[#0a0908]/90" />
 
-        {/* Contraste renforcé derrière le titre pour le rendre lisible */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              'radial-gradient(ellipse 70% 45% at 50% 42%, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 50%, transparent 75%)',
-          }}
+      {/* Hero */}
+      <section className="bandeau-nuit -mt-24 flex flex-col items-center px-5 pb-36 pt-36 text-center">
+        <img
+          src="/images/logo.webp"
+          alt="Valoria"
+          width={1400}
+          height={1417}
+          fetchPriority="high"
+          className="animate-fadeInUp h-auto w-[min(460px,78vw)] drop-shadow-[0_18px_30px_rgb(0_0_0/0.45)]"
         />
+        <h1 className="animate-fadeInUp-delay-1 mt-1 text-[clamp(2.25rem,5vw,3.75rem)] leading-[1.05] text-white [text-shadow:0_4px_0_#0a1228,0_10px_30px_rgb(0_0_0/0.5)]">
+          Neuf nations. Un seul trône.
+        </h1>
+        <p className="animate-fadeInUp-delay-1 mt-4 max-w-xl text-lg font-semibold leading-relaxed text-brume-200 [text-shadow:0_2px_10px_rgb(0_0_0/0.6)]">
+          Serveur Minecraft faction médiéval. Fonde ta ville, maîtrise tes métiers, forge ton armure et défends ton coffre.
+        </p>
+        <div className="animate-fadeInUp-delay-2 mt-8 flex flex-wrap justify-center gap-4">
+          <CopyIpButton className="min-h-[3.75rem] px-7 text-[1.375rem]" />
+          <DiscordButton />
+        </div>
+        <p className="animate-fadeInUp-delay-2 mt-5 rounded-full border border-ciel/20 bg-nuit-900/70 px-4 py-2 text-sm font-extrabold text-brume-300">
+          Minecraft Java {MC_VERSION}
+        </p>
+      </section>
 
-        <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24 text-center">
-          {/* Titre + sous-titre - Valoria Realm bien mis en avant */}
-          <div className="animate-fadeInUp mb-16">
-            <h1
-              className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl text-[var(--gold-light)] mb-5 tracking-[0.04em]"
-              style={{
-                fontFamily: "'Bebas Neue', sans-serif",
-                textShadow:
-                  '0 0 100px rgba(212,175,55,0.6), 0 0 50px rgba(212,175,55,0.5), 0 4px 20px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,0.9), 0 0 0 3px rgba(0,0,0,0.8), 0 0 0 6px rgba(212,175,55,0.25)',
-                WebkitTextStroke: '2px rgba(0,0,0,0.5)',
-              }}
-            >
-              Valoria Realm
-            </h1>
-            <p
-              className="text-xl sm:text-2xl md:text-3xl text-stone-300 tracking-[0.25em] uppercase"
-              style={{
-                fontFamily: "'Playfair Display', serif",
-                fontWeight: 500,
-                letterSpacing: '0.25em',
-                textShadow: '0 2px 12px rgba(0,0,0,0.6)',
-              }}
-            >
-              Serveur PvP Faction 1.21.4
-            </p>
+      {/* Chiffres */}
+      <section aria-label="Valoria en chiffres" className="relative z-10 mx-auto -mt-[70px] max-w-[69rem] px-5">
+        <dl className="grid grid-cols-2 gap-1 rounded-3xl border-2 border-or/35 bg-nuit-800 p-2.5 shadow-[0_8px_0_#091127,0_24px_50px_rgb(0_0_0/0.4)] sm:grid-cols-3 lg:grid-cols-5">
+          {STATS.map((s) => (
+            <div key={s.label} className="flex flex-col-reverse px-3 py-4 text-center">
+              <dt className="mt-2 text-[13px] font-black uppercase tracking-[0.14em] text-brume-300">{s.label}</dt>
+              <dd className="font-display text-5xl leading-none text-or [text-shadow:0_3px_0_var(--color-brique)]">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {/* Piliers */}
+      <section id="piliers" className="mx-auto max-w-[75rem] scroll-mt-28 px-5 pb-10 pt-28">
+        <SectionReveal className="mx-auto max-w-2xl text-center">
+          <p className="kicker">Ce qui t'attend</p>
+          <h2 className="titre-section mt-3 text-[clamp(2.1rem,4.2vw,3.1rem)]">Personne ne naît héros à Valoria</h2>
+          <p className="mt-4 text-lg leading-relaxed text-brume-500">
+            On le devient par le fer, la sueur et la loyauté envers son clan. Six piliers, tous liés entre eux.
+          </p>
+        </SectionReveal>
+        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {PILIERS.map((p, i) => {
+            const Icon = p.icon;
+            return (
+              <SectionReveal key={p.title} delay={(i % 3) * 100}>
+                <article className="carte carte-survol flex h-full flex-col overflow-hidden">
+                  <div className="flex aspect-video items-center justify-center bg-nuit-700">
+                    {p.image ? (
+                      <img src={p.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <Icon className="h-16 w-16 text-or drop-shadow-[0_4px_0_var(--color-brique)]" strokeWidth={2} aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="p-6 pb-7">
+                    <span className="inline-block rounded-lg bg-or/15 px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] text-or">
+                      {p.tag}
+                    </span>
+                    <h3 className="mt-3 text-[1.625rem] text-white">{p.title}</h3>
+                    <p className="mt-2.5 leading-relaxed text-brume-400">{p.text}</p>
+                  </div>
+                </article>
+              </SectionReveal>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Pas d'Hôtel des Ventes */}
+      <section className="mx-auto max-w-[75rem] px-5 py-20">
+        <SectionReveal>
+          <div className="flex flex-wrap items-center gap-10 rounded-[1.75rem] border-[3px] border-brique bg-cuir p-[clamp(1.75rem,5vw,3.5rem)] shadow-[0_8px_0_#160806]">
+            <div className="min-w-0 flex-[1_1_26rem]">
+              <p className="kicker text-or">La loi du commerce brut</p>
+              <h2 className="titre-section mt-3.5 text-[clamp(2.25rem,5vw,3.9rem)] leading-[1.02] [text-shadow:0_4px_0_#160806]">
+                Ici, pas d'Hôtel des Ventes.
+              </h2>
+              <p className="mt-5 text-lg leading-relaxed text-[#f1d9c8]">
+                Chaque échange se fait face à face, dans l'ombre des ruelles ou au cœur des plaines. Le vol et les traquenards font partie du jeu.
+              </p>
+            </div>
+            <blockquote className="min-w-0 flex-[1_1_18rem] font-display text-[clamp(1.75rem,3vw,2.4rem)] leading-tight text-or">
+              Un coffre plein ne se vend pas. Il se défend.
+            </blockquote>
           </div>
+        </SectionReveal>
+      </section>
 
-          {/* Boutons et infos */}
-          <div className="animate-fadeInUp-delay-1 flex flex-wrap items-center justify-center gap-4 sm:gap-5">
-            <button
-              onClick={handleCopyIp}
-              className="group flex items-center gap-3 px-7 py-4 rounded-xl bg-black/40 backdrop-blur-sm border border-[var(--gold)]/40 text-[var(--gold-light)] hover:border-[var(--gold)]/70 hover:bg-black/50 transition-all duration-300"
-            >
-              {copied ? (
-                <span className="font-semibold" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  Copié
-                </span>
-              ) : (
-                <>
-                  <span className="font-mono text-lg sm:text-xl tracking-widest">{SERVER_IP}</span>
-                  <Copy className="w-5 h-5 opacity-70 group-hover:opacity-100 transition-opacity" />
-                </>
-              )}
-            </button>
-            <a
-              href={DISCORD_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-[#5865F2] text-white font-bold hover:bg-[#4752C4] transition-all duration-300 shadow-lg hover:-translate-y-1"
-              style={{ fontFamily: "'Oswald', sans-serif", letterSpacing: '0.08em' }}
-            >
-              <MessageCircle className="w-6 h-6" />
-              <span className="uppercase tracking-wider text-base sm:text-lg">Discord</span>
-              <ExternalLink className="w-4 h-4 opacity-80" />
-            </a>
-            <Link
-              to="/boutique"
-              className="group flex items-center gap-3 px-10 py-4 rounded-xl bg-[var(--gold)] text-[#0a0908] font-bold hover:bg-[var(--gold-light)] transition-all duration-300 shadow-[0_0_40px_rgba(212,175,55,0.35)] hover:shadow-[0_0_50px_rgba(212,175,55,0.45)] hover:-translate-y-1"
-              style={{ fontFamily: "'Oswald', sans-serif", letterSpacing: '0.08em' }}
-            >
-              <span className="uppercase tracking-wider text-base sm:text-lg">Boutique</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+      {/* Rejoindre */}
+      <section id="rejoindre" className="mx-auto max-w-[75rem] scroll-mt-28 px-5 pb-20 pt-14">
+        <SectionReveal className="text-center">
+          <p className="kicker">En 2 minutes</p>
+          <h2 className="titre-section mt-3 text-[clamp(2.1rem,4.2vw,3.1rem)]">Comment nous rejoindre</h2>
+        </SectionReveal>
+        <ol className="mt-12 grid gap-5 md:grid-cols-3">
+          {ETAPES.map((e, i) => (
+            <li key={e.title} className="carte p-7">
+              <span className="flex h-13 w-13 items-center justify-center rounded-2xl bg-or font-display text-3xl text-encre shadow-[0_4px_0_var(--color-or-fonce)]">
+                {i + 1}
+              </span>
+              <h3 className="mt-5 text-[1.375rem] text-white">{e.title}</h3>
+              <p className="mt-2 leading-relaxed text-brume-400">{e.text}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-dashed border-or/40 bg-nuit-850 px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-brume-600">Adresse du serveur</p>
+            <p className="mt-1 font-display text-3xl tracking-wide text-white">{SERVER_IP}</p>
+          </div>
+          <CopyIpButton label="Copier l'adresse" />
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="mx-auto max-w-[54rem] px-5 pb-24 pt-10">
+        <h2 className="titre-section text-center text-[clamp(2rem,4vw,2.75rem)]">Questions fréquentes</h2>
+        <div className="mt-9 flex flex-col gap-3">
+          {FAQ.map((f) => (
+            <details key={f.q} className="carte group px-5">
+              <summary className="flex min-h-[60px] cursor-pointer list-none items-center justify-between gap-3 text-[17px] font-extrabold text-white [&::-webkit-details-marker]:hidden">
+                {f.q}
+                <Plus className="h-6 w-6 shrink-0 text-or transition-transform group-open:rotate-45" strokeWidth={3} aria-hidden="true" />
+              </summary>
+              <p className="pb-5 leading-relaxed text-brume-400">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* Appel final */}
+      <section className="px-5 pb-24">
+        <div className="mx-auto flex max-w-[62rem] flex-col items-center rounded-[1.75rem] border-2 border-or/35 bg-nuit-800 px-6 py-[clamp(2rem,5vw,3.75rem)] text-center shadow-[0_8px_0_#091127]">
+          <img src="/images/icon.webp" alt="" width={96} height={96} loading="lazy" className="h-24 w-24" />
+          <h2 className="titre-section mt-4 text-[clamp(2rem,4vw,3rem)]">Ta bannière t'attend.</h2>
+          <p className="mt-3 text-lg text-brume-500">Choisis ta nation et entre dans le royaume.</p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3.5">
+            <CopyIpButton />
+            <DiscordButton label="Discord" />
+            <Link to="/votes" className="btn-3d btn-contour">
+              Voter
             </Link>
           </div>
-
-          {/* Indicateur scroll */}
-          <button
-            onClick={scrollToNext}
-            className="absolute bottom-16 sm:bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[var(--gold-light)]/90 hover:text-[var(--gold-light)] transition-colors cursor-pointer group"
-            aria-label="Découvrir"
-          >
-            <span className="text-sm uppercase tracking-[0.3em]" style={{ fontFamily: "'Playfair Display', serif" }}>
-              Découvrir
-            </span>
-            <ChevronDown className="w-10 h-10 animate-bounceDown group-hover:scale-110 transition-transform" />
-          </button>
         </div>
       </section>
-
-      {/* Section Chroniques - Intro avec image */}
-      <section id="chroniques" className="relative py-24 sm:py-32 overflow-hidden scroll-mt-20 bg-gradient-to-b from-slate-800 via-slate-900 to-slate-800">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-[var(--gold)]/40 to-transparent" />
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
-          <SectionReveal>
-            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
-              <div className="flex-shrink-0 w-full lg:w-2/5 max-w-sm">
-                <div className="relative rounded-2xl overflow-hidden border-2 border-[var(--gold)]/30 shadow-2xl">
-                  <img src="/images/background.png" alt="Valoria" className="w-full h-64 sm:h-80 object-cover object-center" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <span className="text-[var(--gold-light)] font-bold text-lg" style={{ fontFamily: "'Oswald', sans-serif" }}>Valoria Realm</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex-1 text-center lg:text-left">
-                <p className="text-amber-400/90 text-sm sm:text-base uppercase tracking-[0.2em] mb-6" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  📜 Chroniques de Valoria
-                </p>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--gold-light)] mb-8 leading-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  Le Nouveau Règne
-                </h2>
-                <p className="text-stone-200 text-lg sm:text-xl leading-relaxed" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  Le silence a duré trop longtemps sur ces terres. Autrefois fragmenté, le monde de Valoria
-                  s'éveille sous l'égide de neuf Grandes Nations. Ici, personne ne naît héros ; on le devient
-                  par le fer, la sueur et la loyauté envers son clan.
-                </p>
-              </div>
-            </div>
-          </SectionReveal>
-        </div>
-      </section>
-
-      {/* Section L'Appel des Nations */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-b from-slate-800 via-slate-900 to-slate-800">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23d4af37\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50" />
-        <div className="relative max-w-4xl mx-auto px-6">
-          <SectionReveal>
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <Swords className="w-10 h-10 text-[var(--gold)]" />
-              <h2
-                className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--gold-light)]"
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                L'Appel des Nations
-              </h2>
-            </div>
-            <p
-              className="text-stone-200 text-lg sm:text-xl leading-relaxed text-center max-w-3xl mx-auto"
-              style={{ fontFamily: "'Cormorant Garamond', serif" }}
-            >
-              Le continent n'appartient à personne, mais tous se battent pour l'arracher à l'oubli. Valoria
-              est régie par un équilibre fragile : neuf lignées dominantes, capables d'accueillir chacune les
-              plus puissantes factions de guerriers. Votre but est simple : fonder votre village, protéger vos
-              frontières et grimper les échelons de la hiérarchie pour que le nom de votre bannière résonne
-              lors du jugement mensuel des vainqueurs.
-            </p>
-          </SectionReveal>
-        </div>
-      </section>
-
-      {/* Section L'Héritage de la Forge et des Champs */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-[var(--gold)]/40 to-transparent" />
-        <div className="relative max-w-6xl mx-auto px-6">
-          <SectionReveal>
-            <div className="flex items-center justify-center gap-3 mb-16">
-              <Hammer className="w-10 h-10 text-[var(--gold)]" />
-              <h2
-                className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--gold-light)]"
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                L'Héritage de la Forge et des Champs
-              </h2>
-            </div>
-            <p
-              className="text-stone-200 text-lg sm:text-xl leading-relaxed text-center mb-14 max-w-2xl mx-auto"
-              style={{ fontFamily: "'Cormorant Garamond', serif" }}
-            >
-              À Valoria, votre équipement définit votre destin. Si les paysans se contentent de fer, les
-              seigneurs, eux, traquent des reliques spécifiques :
-            </p>
-          </SectionReveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <SectionReveal delay={0}>
-              <div className="p-8 rounded-2xl bg-slate-800/60 border border-slate-600/50 hover:border-[var(--gold)]/40 hover:-translate-y-1 transition-all duration-300 h-full">
-                <div className="w-14 h-14 rounded-xl bg-[var(--gold)]/20 flex items-center justify-center mb-6">
-                  <Hammer className="w-7 h-7 text-[var(--gold)]" />
-                </div>
-                <h3 className="text-xl font-bold text-[var(--gold-light)] mb-4" style={{ fontFamily: "'Oswald', sans-serif" }}>
-                  Les Outils de Maître
-                </h3>
-                <p className="text-stone-300 leading-relaxed" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  Le Marteau 3x3 pour éventrer la roche, le Bâton de vente pour échanger vos ressources, et les
-                  Houes de farm pour dompter la terre.
-                </p>
-              </div>
-            </SectionReveal>
-            <SectionReveal delay={100}>
-              <div className="p-8 rounded-2xl bg-slate-800/60 border border-slate-600/50 hover:border-[var(--gold)]/40 hover:-translate-y-1 transition-all duration-300 h-full">
-                <div className="w-14 h-14 rounded-xl bg-[var(--gold)]/20 flex items-center justify-center mb-6">
-                  <Shield className="w-7 h-7 text-[var(--gold)]" />
-                </div>
-                <h3 className="text-xl font-bold text-[var(--gold-light)] mb-4" style={{ fontFamily: "'Oswald', sans-serif" }}>
-                  L'Armure de Farm
-                </h3>
-                <p className="text-stone-300 leading-relaxed" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  Seule parure accessible par le craft, elle confère la Célérité et la Vision Nocturne pour
-                  travailler sans relâche, même dans les ténèbres.
-                </p>
-              </div>
-            </SectionReveal>
-            <SectionReveal delay={200}>
-              <div className="p-8 rounded-2xl bg-slate-800/60 border border-slate-600/50 hover:border-[var(--gold)]/40 hover:-translate-y-1 transition-all duration-300 h-full">
-                <div className="w-14 h-14 rounded-xl bg-[var(--gold)]/20 flex items-center justify-center mb-6">
-                  <Swords className="w-7 h-7 text-[var(--gold)]" />
-                </div>
-                <h3 className="text-xl font-bold text-[var(--gold-light)] mb-4" style={{ fontFamily: "'Oswald', sans-serif" }}>
-                  Les Parures de Guerre
-                </h3>
-                <ul className="text-stone-300 leading-relaxed space-y-2" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  <li><strong className="text-[var(--gold-light)]">Combattant</strong> : vitesse d'attaque décuplée.</li>
-                  <li><strong className="text-[var(--gold-light)]">Guerrier</strong> : deux cœurs de vitalité supplémentaires.</li>
-                  <li><strong className="text-[var(--gold-light)]">Souverain</strong> : fusion ultime, bonus de vie et vitesse.</li>
-                </ul>
-              </div>
-            </SectionReveal>
-          </div>
-        </div>
-      </section>
-
-      {/* Section La Loi du Commerce Brut - image à droite comme Chroniques */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-b from-slate-800 via-slate-900 to-slate-800">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-[var(--gold)]/40 to-transparent" />
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
-          <SectionReveal>
-            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
-              <div className="flex-1 text-center lg:text-left order-2 lg:order-1">
-                <div className="flex items-center justify-center lg:justify-start gap-3 mb-8">
-                  <Coins className="w-10 h-10 text-[var(--gold)]" />
-                  <h2
-                    className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--gold-light)]"
-                    style={{ fontFamily: "'Playfair Display', serif" }}
-                  >
-                    La Loi du Commerce Brut
-                  </h2>
-                </div>
-                <p
-                  className="text-stone-200 text-lg sm:text-xl leading-relaxed"
-                  style={{ fontFamily: "'Cormorant Garamond', serif" }}
-                >
-                  Oubliez la sécurité des marchés protégés : à Valoria, l'Hôtel des Ventes n'existe pas. Chaque
-                  échange est une épreuve de force. Les trocs se font face à face, dans l'ombre des ruelles ou au
-                  cœur des plaines, là où le vol et les traquenards font partie intégrante du commerce. Ici, un
-                  coffre plein ne se vend pas, il se défend.
-                </p>
-              </div>
-              <div className="flex-shrink-0 w-full lg:w-2/5 max-w-sm order-1 lg:order-2">
-                <div className="relative rounded-2xl overflow-hidden border-2 border-[var(--gold)]/30 shadow-2xl">
-                  <img src="/images/background.png" alt="Valoria" className="w-full h-64 sm:h-80 object-cover object-center" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <span className="text-[var(--gold-light)] font-bold text-lg" style={{ fontFamily: "'Oswald', sans-serif" }}>Commerce & Troc</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </SectionReveal>
-        </div>
-      </section>
-
-      {/* Section Les Failles et le Chaos */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-[var(--gold)]/40 to-transparent" />
-        <div className="relative max-w-6xl mx-auto px-6">
-          <SectionReveal>
-            <div className="flex items-center justify-center gap-3 mb-16">
-              <Sparkles className="w-10 h-10 text-[var(--gold)]" />
-              <h2
-                className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--gold-light)]"
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                Les Failles et le Chaos
-              </h2>
-            </div>
-            <p
-              className="text-stone-200 text-lg sm:text-xl leading-relaxed text-center mb-14 max-w-2xl mx-auto"
-              style={{ fontFamily: "'Cormorant Garamond', serif" }}
-            >
-              Le monde est instable et laisse parfois place à des phénomènes inexpliqués :
-            </p>
-          </SectionReveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <SectionReveal delay={0}>
-              <div className="p-8 rounded-2xl bg-slate-800/60 border border-slate-600/50 hover:border-[var(--gold)]/40 hover:-translate-y-1 transition-all duration-300">
-                <h3 className="text-xl font-bold text-[var(--gold-light)] mb-4" style={{ fontFamily: "'Oswald', sans-serif" }}>
-                  La Dimension Éphémère
-                </h3>
-                <p className="text-stone-300 leading-relaxed" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  Une faille s'ouvre rarement, menant vers un lieu oublié. Ceux qui osent y entrer peuvent
-                  traquer des créatures relâchant des reliques mystérieuses, bien loin de ce que l'on trouve
-                  sur les terres connues.
-                </p>
-              </div>
-            </SectionReveal>
-            <SectionReveal delay={150}>
-              <div className="p-8 rounded-2xl bg-slate-800/60 border border-slate-600/50 hover:border-[var(--gold)]/40 hover:-translate-y-1 transition-all duration-300">
-                <h3 className="text-xl font-bold text-[var(--gold-light)] mb-4" style={{ fontFamily: "'Oswald', sans-serif" }}>
-                  L'Épreuve du FFA
-                </h3>
-                <p className="text-stone-300 leading-relaxed" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  Une arène de sang où chaque guerrier devient un inconnu. Les noms s'effacent, les identités
-                  disparaissent ; seul le dernier survivant pourra réclamer la gloire.
-                </p>
-              </div>
-            </SectionReveal>
-          </div>
-        </div>
-      </section>
-
-      {/* Section Le Lien avec les Familiers */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-b from-slate-800 via-slate-900 to-slate-800">
-        <div className="relative max-w-3xl mx-auto px-6 text-center">
-          <SectionReveal>
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <Fish className="w-10 h-10 text-[var(--gold)]" />
-              <h2
-                className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--gold-light)]"
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                Le Lien avec les Familiers
-              </h2>
-            </div>
-            <p
-              className="text-stone-200 text-lg sm:text-xl leading-relaxed"
-              style={{ fontFamily: "'Cormorant Garamond', serif" }}
-            >
-              Dans les eaux de Valoria se cachent des espèces de poissons rares. La pêche est vitale : c'est le
-              seul moyen de nourrir vos Familiers, ces compagnons qui vous épaulent dans vos aventures. Sans
-              ces prises spécifiques, vos alliés ne pourront pas regagner leurs forces.
-            </p>
-          </SectionReveal>
-        </div>
-      </section>
-
-      {/* CTA Final */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-[#0a0908]">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23d4af37\' fill-opacity=\'0.05\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]" />
-        <div className="relative max-w-2xl mx-auto px-6 text-center">
-          <SectionReveal>
-            <h2
-              className="text-3xl sm:text-4xl font-semibold text-[var(--gold-light)] mb-10"
-              style={{ fontFamily: "'Playfair Display', serif" }}
-            >
-              Prêt à rejoindre le royaume ?
-            </h2>
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-              <button
-                onClick={handleCopyIp}
-                className="group flex items-center gap-3 px-8 py-4 rounded-xl bg-black/50 backdrop-blur-sm border border-[var(--gold)]/50 text-[var(--gold-light)] hover:border-[var(--gold)] hover:bg-black/60 transition-all duration-300"
-              >
-                {copied ? (
-                  <span style={{ fontFamily: "'Playfair Display', serif" }}>Copié</span>
-                ) : (
-                  <>
-                    <span className="font-mono text-lg tracking-widest">{SERVER_IP}</span>
-                    <Copy className="w-5 h-5 opacity-70 group-hover:opacity-100" />
-                  </>
-                )}
-              </button>
-              <a
-                href={DISCORD_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-3 px-10 py-4 rounded-xl bg-[#5865F2] text-white font-bold hover:bg-[#4752C4] transition-all duration-300 hover:-translate-y-1"
-                style={{ fontFamily: "'Oswald', sans-serif", letterSpacing: '0.08em' }}
-              >
-                <MessageCircle className="w-5 h-5" />
-                <span className="uppercase tracking-wider">Discord</span>
-                <ExternalLink className="w-4 h-4 opacity-80" />
-              </a>
-              <Link
-                to="/boutique"
-                className="group flex items-center gap-3 px-10 py-4 rounded-xl bg-[var(--gold)] text-[#0a0908] font-bold hover:bg-[var(--gold-light)] transition-all duration-300 shadow-[0_0_40px_rgba(212,175,55,0.35)] hover:shadow-[0_0_50px_rgba(212,175,55,0.45)] hover:-translate-y-1"
-                style={{ fontFamily: "'Oswald', sans-serif", letterSpacing: '0.08em' }}
-              >
-                <span className="uppercase tracking-wider">Boutique</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <Link
-                to="/votes"
-                className="px-10 py-4 rounded-xl border-2 border-[var(--gold)]/50 text-[var(--gold-light)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all duration-300 font-semibold"
-                style={{ fontFamily: "'Playfair Display', serif" }}
-              >
-                Voter
-              </Link>
-            </div>
-          </SectionReveal>
-        </div>
-      </section>
-
-      {/* Bouton Discord flottant - toujours visible */}
-      <a
-        href={DISCORD_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 px-5 py-3 rounded-full bg-[#5865F2] text-white font-bold shadow-lg hover:bg-[#4752C4] hover:scale-105 transition-all duration-300 hover:shadow-[0_10px_30px_-5px_rgba(88,101,242,0.5)]"
-        style={{ fontFamily: "'Oswald', sans-serif" }}
-        aria-label="Rejoindre le Discord"
-      >
-        <MessageCircle className="w-6 h-6" />
-        <span className="hidden sm:inline">Discord</span>
-      </a>
     </>
   );
 }

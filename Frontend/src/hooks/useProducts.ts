@@ -14,7 +14,7 @@ interface ApiProduct {
 
 function placeholderImage(name: string) {
   const label = encodeURIComponent(name.slice(0, 16));
-  return `https://placehold.co/400x400/1e3a5f/fbbf24?text=${label}`;
+  return `https://placehold.co/400x300/1a2f5e/ffb52e?text=${label}`;
 }
 
 export function useProducts() {

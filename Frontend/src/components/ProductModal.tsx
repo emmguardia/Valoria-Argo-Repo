@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { X, Coins } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import type { Product } from '../data/products';
+import EcuIcon from './EcuIcon';
 
 interface ProductModalProps {
   product: Product | null;
@@ -51,38 +52,37 @@ export default function ProductModal({ product, isOpen, onClose, onPurchaseSucce
   const handleCancelConfirm = () => setShowConfirm(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={showConfirm ? handleCancelConfirm : onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-slideDown border border-gray-100">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="produit-titre">
+      <div className="absolute inset-0 bg-nuit-950/75 backdrop-blur-sm" onClick={showConfirm ? handleCancelConfirm : onClose} />
+      <div className="carte relative w-full max-w-lg overflow-hidden border-or/35 shadow-[0_8px_0_#091127,0_30px_60px_rgb(0_0_0/0.5)] animate-slideDown">
         <button
           onClick={showConfirm ? handleCancelConfirm : onClose}
-          className="absolute top-4 right-4 p-2.5 rounded-full bg-gray-100 hover:bg-gray-200 z-10 transition-colors"
+          aria-label="Fermer"
+          className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-nuit-900/80 text-brume-100 transition-colors hover:bg-nuit-700"
         >
-          <X className="w-5 h-5" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
 
         {showConfirm ? (
           <div className="p-8 sm:p-10">
             <div className="text-center mb-8">
-              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-6">
-                <Coins className="w-8 h-8 text-amber-600" />
-              </div>
-              <h2 className="font-display text-2xl text-gray-900 mb-2">Confirmer l'achat</h2>
-              <p className="text-gray-600">
+              <EcuIcon className="mx-auto mb-5 h-16 w-16" />
+              <h2 id="produit-titre" className="mb-2 text-3xl text-white">Confirmer l'achat</h2>
+              <p className="text-brume-300">
                 Tu es sur le point d'acheter <strong>{product.name}</strong> pour <strong>{product.price} Écus</strong>.
               </p>
-              <p className="text-gray-500 text-sm mt-2">Êtes-vous sûr ?</p>
+              <p className="mt-2 text-sm text-brume-600">Les Écus seront débités de ton solde.</p>
             </div>
             <div className="flex gap-4">
               <button
                 onClick={handleCancelConfirm}
-                className="flex-1 py-3.5 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                className="btn-3d btn-nuit flex-1"
               >
                 Annuler
               </button>
               <button
                 onClick={handleConfirm}
-                className="flex-1 py-3.5 rounded-xl bg-[#1e3a5f] text-white font-semibold hover:bg-[#152a45] transition-colors"
+                className="btn-3d btn-or flex-1"
               >
                 Confirmer
               </button>
@@ -90,28 +90,32 @@ export default function ProductModal({ product, isOpen, onClose, onPurchaseSucce
           </div>
         ) : (
           <>
-            <div className="h-72 bg-[#1e3a5f]/5">
+            <div className="aspect-[4/3] bg-nuit-700">
               <img
                 src={product.image}
-                alt={product.name}
-                className="w-full h-full object-cover"
+                alt=""
+                className="h-full w-full object-cover"
               />
             </div>
             <div className="p-8 space-y-5">
               <div>
                 {product.isNew && (
-                  <span className="inline-block px-3 py-1 bg-[#f59e0b] text-[#1e3a5f] text-xs font-bold rounded-full mb-2">
-                    Nouveau
+                  <span className="mb-2 inline-block rounded-lg bg-ciel px-2.5 py-1 text-xs font-black tracking-[0.12em] text-[#062033]">
+                    NOUVEAU
                   </span>
                 )}
-                <h2 className="font-display text-2xl text-gray-900">{product.name}</h2>
+                <h2 id="produit-titre" className="text-3xl text-white">{product.name}</h2>
                 {product.description && (
-                  <p className="text-gray-600 mt-2 leading-relaxed">{product.description}</p>
+                  <p className="mt-2 leading-relaxed text-brume-400">{product.description}</p>
                 )}
               </div>
-              <div className="flex items-center justify-between pt-5 border-t border-gray-100">
-                <span className="text-2xl font-bold text-[#1e3a5f]">{product.price} Écus</span>
-                <button onClick={handleBuyClick} className="px-6 py-3 rounded-xl bg-[#1e3a5f] text-white font-semibold hover:bg-[#152a45] transition-colors">
+              <div className="flex items-center justify-between gap-4 border-t border-ciel/15 pt-5">
+                <span className="inline-flex items-center gap-2 font-display text-3xl text-or">
+                  <EcuIcon className="h-7 w-7" />
+                  {product.price}
+                  <span className="sr-only">Écus</span>
+                </span>
+                <button type="button" onClick={handleBuyClick} className="btn-3d btn-or">
                   {!isLoggedIn ? 'Se connecter' : canAfford ? 'Acheter' : 'Acheter des Écus'}
                 </button>
               </div>

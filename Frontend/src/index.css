@@ -1,13 +1,162 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@400;600;700;800;900&display=swap');
 
 @import "tailwindcss";
 
+/* Direction artistique « cartoon nuit » : couleurs tirées du logo du graphiste
+   (toits cyan, créneaux or, contour brique) posées sur un ciel de nuit. */
+@theme {
+  --color-nuit-950: #081027;
+  --color-nuit-900: #0b1530;
+  --color-nuit-850: #0e1b3d;
+  --color-nuit-800: #12224a;
+  --color-nuit-700: #1a2f5e;
+  --color-or: #ffb52e;
+  --color-or-fonce: #b4541a;
+  --color-encre: #3a1608;
+  --color-brique: #7a2416;
+  --color-cuir: #2a1410;
+  --color-ciel: #5fd8ff;
+  --color-brume-100: #eaf2ff;
+  --color-brume-200: #dce7ff;
+  --color-brume-300: #c9d6f2;
+  --color-brume-400: #b4c3e2;
+  --color-brume-500: #a9b9da;
+  --color-brume-600: #8ea3cc;
+  --font-display: 'Lilita One', system-ui, sans-serif;
+  --font-sans: 'Nunito', system-ui, sans-serif;
+}
+
 :root {
-  --gold: #d4af37;
-  --gold-light: #f4e4bc;
-  --gold-dark: #8b6914;
-  --ink: #0a0908;
-  --parchment: #f5f0e6;
+  --gold: #ffb52e;
+  --gold-light: #ffe3a6;
+  --gold-dark: #b4541a;
+  --ink: #0b1530;
+  --parchment: #eaf2ff;
+}
+
+@layer components {
+  /* Boutons en relief : l'ombre dure rappelle le biseau des lettres du logo */
+  .btn-3d {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    min-height: 3.25rem;
+    padding: 0 1.5rem;
+    border-radius: 1rem;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  }
+  .btn-3d:hover {
+    transform: translateY(-2px);
+  }
+  .btn-3d:active {
+    transform: translateY(3px);
+  }
+  .btn-3d:disabled {
+    cursor: wait;
+    opacity: 0.7;
+    transform: none;
+  }
+  .btn-or {
+    background: var(--color-or);
+    color: var(--color-encre);
+    box-shadow: 0 5px 0 var(--color-or-fonce), 0 12px 26px rgb(0 0 0 / 0.35);
+  }
+  .btn-or:active {
+    box-shadow: 0 2px 0 var(--color-or-fonce);
+  }
+  .btn-nuit {
+    background: var(--color-nuit-700);
+    color: #fff;
+    border: 2px solid rgb(95 216 255 / 0.45);
+    box-shadow: 0 5px 0 #091127;
+  }
+  .btn-nuit:active {
+    box-shadow: 0 2px 0 #091127;
+  }
+  .btn-contour {
+    background: transparent;
+    color: var(--color-or);
+    border: 2px solid rgb(255 181 46 / 0.6);
+  }
+  .btn-contour:hover {
+    background: rgb(255 181 46 / 0.08);
+  }
+
+  .kicker {
+    font-family: var(--font-sans);
+    font-weight: 900;
+    font-size: 0.8125rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-ciel);
+  }
+  .titre-section {
+    font-family: var(--font-display);
+    font-weight: 400;
+    color: #fff;
+    line-height: 1.08;
+    text-shadow: 0 4px 0 #050b1c;
+  }
+  .carte {
+    background: var(--color-nuit-800);
+    border: 2px solid rgb(95 216 255 / 0.14);
+    border-radius: 1.375rem;
+  }
+  .carte-survol {
+    transition: transform 0.18s ease, border-color 0.18s ease;
+  }
+  .carte-survol:hover {
+    transform: translateY(-4px);
+    border-color: rgb(255 181 46 / 0.55);
+  }
+
+  /* Bandeau des pages : la bannière du graphiste fondue dans la nuit.
+     Elle contient déjà le logo et ne fait que 960 px : on la floute pour
+     n'en garder que l'ambiance (tours, ciel) sous le vrai logo net. */
+  .bandeau-nuit,
+  .bandeau-nuit-sombre {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .bandeau-nuit::before,
+  .bandeau-nuit-sombre::before {
+    content: '';
+    position: absolute;
+    inset: -24px;
+    z-index: -2;
+    background: url('/images/banniere.webp') center top / max(100%, 1100px) auto no-repeat;
+    filter: blur(10px) saturate(1.1);
+    /* fond la base de la bannière dans la nuit, sans bord net */
+    mask-image: linear-gradient(180deg, #000 0, #000 calc(max(100vw, 1100px) * 0.2), transparent calc(max(100vw, 1100px) * 0.354));
+  }
+  .bandeau-nuit::after,
+  .bandeau-nuit-sombre::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg, rgb(11 21 48 / 0.25) 0%, rgb(11 21 48 / 0.6) 40%, var(--color-nuit-900) 70%);
+  }
+  .bandeau-nuit-sombre::after {
+    background: linear-gradient(180deg, rgb(11 21 48 / 0.55) 0%, rgb(11 21 48 / 0.82) 60%, var(--color-nuit-900) 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-3d,
+  .carte-survol {
+    transition: none;
+  }
+  .btn-3d:hover,
+  .carte-survol:hover {
+    transform: none;
+  }
 }
 
 @layer utilities {
@@ -248,14 +397,16 @@ html {
 }
 
 body {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 1.0625rem;
-  background: var(--ink);
-  color: var(--parchment);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  background: var(--color-nuit-900);
+  color: var(--color-brume-100);
 }
 
+/* Lilita One n'existe qu'en 400 : pas de faux gras sur les titres */
 h1, h2, h3, h4, .font-display {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-display);
+  font-synthesis: none;
 }
 
 /* Grain overlay pour profondeur */

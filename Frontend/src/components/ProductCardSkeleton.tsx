@@ -1,14 +1,14 @@
 export default function ProductCardSkeleton() {
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden animate-pulse">
-      <div className="h-56 bg-gray-200" />
-      <div className="p-6 space-y-4">
-        <div className="h-4 bg-gray-200 rounded w-3/4" />
-        <div className="h-3 bg-gray-100 rounded w-full" />
-        <div className="h-3 bg-gray-100 rounded w-2/3" />
-        <div className="flex justify-between items-center pt-4">
-          <div className="h-6 bg-gray-200 rounded w-20" />
-          <div className="h-10 bg-gray-200 rounded-xl w-24" />
+    <div className="carte animate-pulse overflow-hidden" aria-hidden="true">
+      <div className="aspect-[4/3] bg-nuit-700" />
+      <div className="space-y-3 p-5">
+        <div className="h-3 w-1/4 rounded bg-nuit-700" />
+        <div className="h-5 w-3/4 rounded bg-nuit-700" />
+        <div className="h-3 w-full rounded bg-nuit-850" />
+        <div className="flex items-center justify-between pt-4">
+          <div className="h-6 w-20 rounded bg-nuit-700" />
+          <div className="h-11 w-20 rounded-xl bg-nuit-700" />
         </div>
       </div>
     </div>
