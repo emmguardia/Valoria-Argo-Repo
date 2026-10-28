@@ -1,16 +1,16 @@
 import { Link } from 'react-router-dom';
-import { Fish, Flag, Hammer, MessageCircle, Plus, Shield, Sparkles, Swords, type LucideIcon } from 'lucide-react';
+import { Fish, Flag, Gift, Hammer, MessageCircle, Plus, Shield, Sparkles, type LucideIcon } from 'lucide-react';
 import SEO from '../components/SEO';
 import CopyIpButton from '../components/CopyIpButton';
 import { useInView } from '../hooks/useInView';
 import { DISCORD_URL, MC_VERSION, SERVER_IP } from '../data/site';
 
+// Chiffres et bonus relevés dans les configs du serveur (FactionsNations, FoxJobs, FoxArmors)
 const STATS = [
   { value: '9', label: 'Nations' },
   { value: '5', label: 'Métiers' },
-  { value: '20', label: 'Poissons rares' },
-  { value: '5', label: 'Familiers' },
-  { value: '0', label: 'Hôtel des ventes' },
+  { value: '100', label: 'Niveaux par métier' },
+  { value: '4', label: 'Armures de set' },
 ];
 
 interface Pilier {
@@ -20,51 +20,67 @@ interface Pilier {
   icon: LucideIcon;
   /** Capture en jeu ; tant qu'elle manque, l'icône prend la place */
   image?: string;
+  /** Pas encore en jeu : la carte affiche un badge « Bientôt » */
+  soon?: boolean;
 }
 
 const PILIERS: Pilier[] = [
   {
     tag: '9 nations',
     title: "L'Appel des Nations",
-    text: 'Rejoins une lignée, fonde ton village, protège tes frontières. Ta bannière se joue au jugement mensuel des vainqueurs.',
+    text: "Ta faction rejoint l'une des neuf nations et tous ses membres profitent de son bonus permanent. Jusqu'à 10 factions par nation.",
     icon: Flag,
     image: '/images/piliers/nations.webp',
   },
   {
-    tag: '5 métiers · rangs',
+    tag: '5 métiers · 100 niveaux',
     title: 'Grimpe les échelons',
-    text: 'Monte tes métiers et tes rangs pour débloquer le monde de minage et le Nether. Outils de maître : marteau 3x3, houes de farm, bâton de vente.',
+    text: "Bûcheron, chasseur, fermier, mineur et pêcheur : monte chaque métier jusqu'au niveau 100. Revends ta récolte d'un coup avec le bâton de vente.",
     icon: Hammer,
     image: '/images/piliers/metiers.webp',
   },
   {
-    tag: 'Armures',
+    tag: '4 armures',
     title: 'Les Parures de Guerre',
-    text: "Combattant pour la vitesse d'attaque, Guerrier pour deux cœurs de plus, Souverain pour les deux. L'armure de farm, elle, se crafte.",
+    text: 'Farm pour la vitesse et la vision nocturne, Combattant pour la Célérité, Guerrier pour deux cœurs de plus, Souverain pour les deux.',
     icon: Shield,
     image: '/images/piliers/armures.webp',
   },
   {
-    tag: 'Pêche · familiers',
-    title: 'Pêche pour tes alliés',
-    text: "20 poissons rares se cachent dans les eaux de Valoria. C'est la seule nourriture de tes familiers : sans tes prises, ils ne regagnent pas leurs forces.",
-    icon: Fish,
-    image: '/images/piliers/peche.webp',
-  },
-  {
-    tag: 'Failles · boss',
-    title: 'La Dimension Éphémère',
-    text: "Une faille s'ouvre rarement vers un lieu oublié. Ses créatures relâchent des reliques introuvables sur les terres connues.",
-    icon: Sparkles,
-    image: '/images/piliers/failles.webp',
-  },
-  {
-    tag: 'Events · PvP',
-    title: 'KOTH, Totem et FFA',
-    text: "Airdrops au spawn, arène FFA où les noms s'effacent, classement PvP mensuel. Seul le dernier debout réclame la gloire.",
-    icon: Swords,
+    tag: 'Events · Battle Pass',
+    title: 'Airdrops et Battle Pass',
+    text: 'Des largages de 7 à 20 coffres tombent sur la carte, le Battle Pass propose des quêtes chaque jour, et chaque connexion quotidienne rapporte une récompense.',
+    icon: Gift,
     image: '/images/piliers/events.webp',
   },
+  {
+    tag: 'Pêche · familiers',
+    title: 'Pêche pour tes alliés',
+    text: 'Des poissons rares à pêcher pour nourrir des familiers qui combattent à tes côtés. En préparation.',
+    icon: Fish,
+    image: '/images/piliers/peche.webp',
+    soon: true,
+  },
+  {
+    tag: 'Failles · KOTH',
+    title: 'Dimension Éphémère et KOTH',
+    text: "Une faille vers un lieu oublié et ses boss, puis des KOTH pour se disputer le contrôle d'une zone. En préparation.",
+    icon: Sparkles,
+    image: '/images/piliers/failles.webp',
+    soon: true,
+  },
+];
+
+const NATIONS = [
+  { name: 'Francs', bonus: '+4 % de dégâts' },
+  { name: 'Anglo-Saxons', bonus: "+8 % de dégâts à l'arc" },
+  { name: 'Vikings', bonus: '+9 % de vitesse' },
+  { name: 'Chine médiévale', bonus: 'Célérité I et vision nocturne' },
+  { name: 'Bohémiens', bonus: '-20 % de dégâts subis' },
+  { name: 'Bretons', bonus: "Une potion d'invisibilité toutes les 48 h" },
+  { name: 'Aragonais', bonus: '+12 % de recul et résistance au feu' },
+  { name: 'Turcs seldjoukides', bonus: 'Chance IV et +8 % de dégâts critiques' },
+  { name: 'Byzantins', bonus: "-25 % de dégâts d'explosion" },
 ];
 
 const ETAPES = [
@@ -83,12 +99,12 @@ const FAQ = [
     a: "Les votes se gagnent en votant une fois par jour sur chaque site partenaire. Les Écus s'achètent sur le site et servent dans la boutique.",
   },
   {
-    q: "Pourquoi il n'y a pas d'Hôtel des Ventes ?",
-    a: 'Parce que chaque échange doit être une épreuve. Le troc se fait face à face, et un coffre plein se défend.',
+    q: 'Comment fonctionnent les nations ?',
+    a: "C'est ta faction qui rejoint une nation. Son bonus s'applique alors à tous ses membres, et une nation accueille jusqu'à 10 factions.",
   },
   {
-    q: 'Comment nourrir mes familiers ?',
-    a: 'Uniquement avec les poissons rares pêchés dans les eaux de Valoria.',
+    q: 'Les métiers ont-ils une limite ?',
+    a: "Oui, chacun des 5 métiers monte jusqu'au niveau 100.",
   },
 ];
 
@@ -155,7 +171,7 @@ export default function HomePage() {
 
       {/* Chiffres */}
       <section aria-label="Valoria en chiffres" className="relative z-10 mx-auto -mt-[70px] max-w-[69rem] px-5">
-        <dl className="grid grid-cols-2 gap-1 rounded-3xl border-2 border-or/35 bg-nuit-800 p-2.5 shadow-[0_8px_0_#091127,0_24px_50px_rgb(0_0_0/0.4)] sm:grid-cols-3 lg:grid-cols-5">
+        <dl className="grid grid-cols-2 gap-1 rounded-3xl border-2 border-or/35 bg-nuit-800 p-2.5 shadow-[0_8px_0_#091127,0_24px_50px_rgb(0_0_0/0.4)] sm:grid-cols-4">
           {STATS.map((s) => (
             <div key={s.label} className="flex flex-col-reverse px-3 py-4 text-center">
               <dt className="mt-2 text-[13px] font-black uppercase tracking-[0.14em] text-brume-300">{s.label}</dt>
@@ -171,7 +187,7 @@ export default function HomePage() {
           <p className="kicker">Ce qui t'attend</p>
           <h2 className="titre-section mt-3 text-[clamp(2.1rem,4.2vw,3.1rem)]">Personne ne naît héros à Valoria</h2>
           <p className="mt-4 text-lg leading-relaxed text-brume-500">
-            On le devient par le fer, la sueur et la loyauté envers son clan. Six piliers, tous liés entre eux.
+            On le devient par le fer, la sueur et la loyauté envers son clan. Quatre piliers dès l'ouverture, deux autres en préparation.
           </p>
         </SectionReveal>
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -183,7 +199,19 @@ export default function HomePage() {
                   <div className="relative flex aspect-video items-center justify-center bg-nuit-700">
                     {p.image ? (
                       <>
-                        <img src={p.image} alt="" width={960} height={540} loading="lazy" className="h-full w-full object-cover" />
+                        <img
+                          src={p.image}
+                          alt=""
+                          width={960}
+                          height={540}
+                          loading="lazy"
+                          className={`h-full w-full object-cover ${p.soon ? 'opacity-60 saturate-50' : ''}`}
+                        />
+                        {p.soon && (
+                          <span className="absolute right-3 top-3 rounded-lg bg-ciel px-2.5 py-1 text-xs font-black tracking-[0.12em] text-[#062033]">
+                            BIENTÔT
+                          </span>
+                        )}
                         <span className="absolute bottom-3 left-3 flex h-11 w-11 items-center justify-center rounded-xl bg-nuit-900/85 shadow-[0_3px_0_#050b1c]">
                           <Icon className="h-6 w-6 text-or" strokeWidth={2.2} aria-hidden="true" />
                         </span>
@@ -206,34 +234,31 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Pas d'Hôtel des Ventes */}
-      <section className="mx-auto max-w-[75rem] px-5 py-20">
-        <SectionReveal>
-          <div className="flex flex-wrap items-center gap-10 rounded-[1.75rem] border-[3px] border-brique bg-cuir p-[clamp(1.75rem,5vw,3.5rem)] shadow-[0_8px_0_#160806]">
-            <div className="min-w-0 flex-[1_1_26rem]">
-              <p className="kicker text-or">La loi du commerce brut</p>
-              <h2 className="titre-section mt-3.5 text-[clamp(2.25rem,5vw,3.9rem)] leading-[1.02] [text-shadow:0_4px_0_#160806]">
-                Ici, pas d'Hôtel des Ventes.
-              </h2>
-              <p className="mt-5 text-lg leading-relaxed text-[#f1d9c8]">
-                Chaque échange se fait face à face, dans l'ombre des ruelles ou au cœur des plaines. Le vol et les traquenards font partie du jeu.
-              </p>
-            </div>
-            <figure className="min-w-0 flex-[1_1_22rem]">
-              <img
-                src="/images/piliers/commerce.webp"
-                alt="Rue pavée éclairée de lanternes dans un village médiéval"
-                width={960}
-                height={540}
-                loading="lazy"
-                className="aspect-[4/3] w-full rounded-2xl border-2 border-or/30 object-cover"
-              />
-              <blockquote className="mt-5 font-display text-[clamp(1.6rem,2.6vw,2.2rem)] leading-tight text-or">
-                Un coffre plein ne se vend pas. Il se défend.
-              </blockquote>
-            </figure>
-          </div>
+      {/* Nations */}
+      <section id="nations" className="mx-auto max-w-[75rem] scroll-mt-28 px-5 py-20">
+        <SectionReveal className="mx-auto max-w-2xl text-center">
+          <p className="kicker">Choisis ton camp</p>
+          <h2 className="titre-section mt-3 text-[clamp(2.1rem,4.2vw,3.1rem)]">Neuf nations, neuf façons de combattre</h2>
+          <p className="mt-4 text-lg leading-relaxed text-brume-500">
+            Chaque nation donne un bonus permanent à tous ses membres et accueille jusqu'à 10 factions.
+          </p>
         </SectionReveal>
+        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {NATIONS.map((n) => (
+            <li key={n.name} className="carte flex items-center gap-4 p-5">
+              <span
+                aria-hidden="true"
+                className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-or font-display text-2xl text-encre shadow-[0_4px_0_var(--color-or-fonce)]"
+              >
+                {n.name[0]}
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-[1.375rem] text-white">{n.name}</h3>
+                <p className="mt-0.5 font-bold text-brume-400">{n.bonus}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* Rejoindre */}
