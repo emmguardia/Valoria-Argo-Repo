@@ -179,7 +179,11 @@ jobs:
         id: tag
         run: |
           set -euo pipefail
-          CONTENT=$(cat version.txt | tr -d '\r\n ')
+          # Version lue sur la tête de la branche, pas sur le commit construit :
+          # deux pushes rapprochés lisaient le même version.txt, visaient le même
+          # tag, et le second pin finissait en conflit de rebase sur values.yaml.
+          git fetch --quiet --depth=1 origin "${GITHUB_REF_NAME}"
+          CONTENT=$(git show FETCH_HEAD:version.txt | tr -d '\r\n ')
           MAJOR=$(echo "$CONTENT" | cut -d. -f1)
           MINOR=$(echo "$CONTENT" | cut -d. -f2)
           PATCH=$(echo "$CONTENT" | cut -d. -f3)
@@ -340,37 +344,40 @@ jobs:
             echo "::warning::Digest backend introuvable, pin sur le tag ${TAG} (déploiement OK mais non immuable)."
           fi
 
-          update_image "valoria-front" "$FRONTEND_IMAGE"
-          update_image "valoria-back"  "$BACKEND_IMAGE"
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add version.txt "$VALUES_PATH"
 
-          if git diff --staged --quiet; then
-            echo "::warning::Rien à commiter alors que le pin a réussi — values.yaml pointait déjà sur ce digest."
-          else
+          # Chaque tentative repart de la tête de la branche et réécrit le pin
+          # par-dessus : un run précédent a pu pousser son propre pin entre-temps,
+          # et rebaser deux digests différents sur la même ligne de values.yaml
+          # finissait toujours en conflit. Les runs étant sérialisés (concurrency),
+          # le run courant porte le commit le plus récent : son digest doit gagner.
+          pushed=false
+          for attempt in 1 2 3; do
+            git fetch --quiet --depth=1 origin "$BRANCH"
+            git reset --quiet --hard FETCH_HEAD
+            echo "${TAG#v}" > version.txt
+            update_image "valoria-front" "$FRONTEND_IMAGE"
+            update_image "valoria-back"  "$BACKEND_IMAGE"
+            git add version.txt "$VALUES_PATH"
+
+            if git diff --staged --quiet; then
+              echo "::warning::Rien à commiter alors que le pin a réussi — values.yaml pointait déjà sur ce digest."
+              pushed=true
+              break
+            fi
             git commit -m "chore(helm): pin images to digest ${TAG} [skip ci]"
 
-            pushed=false
-            for attempt in 1 2 3; do
-              if git push origin "HEAD:${BRANCH}"; then
-                pushed=true
-                break
-              fi
-              echo "::warning::Push refusé (tentative ${attempt}/3), rebase sur origin/${BRANCH}…"
-              git fetch origin "$BRANCH"
-              if ! git rebase "origin/${BRANCH}"; then
-                git rebase --abort || true
-                echo "::error::Conflit de rebase sur ${BRANCH}, intervention manuelle requise."
-                exit 1
-              fi
-              sleep $((attempt * 3))
-            done
-            if [ "$pushed" != "true" ]; then
-              echo "::error::Impossible de pousser le pin de digest après 3 tentatives."
-              exit 1
+            if git push origin "HEAD:${BRANCH}"; then
+              pushed=true
+              break
             fi
+            echo "::warning::Push refusé (tentative ${attempt}/3), nouvelle tentative depuis origin/${BRANCH}…"
+            sleep $((attempt * 3))
+          done
+          if [ "$pushed" != "true" ]; then
+            echo "::error::Impossible de pousser le pin de digest après 3 tentatives."
+            exit 1
           fi
 
           {
