@@ -28,36 +28,42 @@ const PILIERS: Pilier[] = [
     title: "L'Appel des Nations",
     text: 'Rejoins une lignée, fonde ton village, protège tes frontières. Ta bannière se joue au jugement mensuel des vainqueurs.',
     icon: Flag,
+    image: '/images/piliers/nations.webp',
   },
   {
     tag: '5 métiers · rangs',
     title: 'Grimpe les échelons',
     text: 'Monte tes métiers et tes rangs pour débloquer le monde de minage et le Nether. Outils de maître : marteau 3x3, houes de farm, bâton de vente.',
     icon: Hammer,
+    image: '/images/piliers/metiers.webp',
   },
   {
     tag: 'Armures',
     title: 'Les Parures de Guerre',
     text: "Combattant pour la vitesse d'attaque, Guerrier pour deux cœurs de plus, Souverain pour les deux. L'armure de farm, elle, se crafte.",
     icon: Shield,
+    image: '/images/piliers/armures.webp',
   },
   {
     tag: 'Pêche · familiers',
     title: 'Pêche pour tes alliés',
     text: "20 poissons rares se cachent dans les eaux de Valoria. C'est la seule nourriture de tes familiers : sans tes prises, ils ne regagnent pas leurs forces.",
     icon: Fish,
+    image: '/images/piliers/peche.webp',
   },
   {
     tag: 'Failles · boss',
     title: 'La Dimension Éphémère',
     text: "Une faille s'ouvre rarement vers un lieu oublié. Ses créatures relâchent des reliques introuvables sur les terres connues.",
     icon: Sparkles,
+    image: '/images/piliers/failles.webp',
   },
   {
     tag: 'Events · PvP',
     title: 'KOTH, Totem et FFA',
     text: "Airdrops au spawn, arène FFA où les noms s'effacent, classement PvP mensuel. Seul le dernier debout réclame la gloire.",
     icon: Swords,
+    image: '/images/piliers/events.webp',
   },
 ];
 
@@ -174,9 +180,14 @@ export default function HomePage() {
             return (
               <SectionReveal key={p.title} delay={(i % 3) * 100}>
                 <article className="carte carte-survol flex h-full flex-col overflow-hidden">
-                  <div className="flex aspect-video items-center justify-center bg-nuit-700">
+                  <div className="relative flex aspect-video items-center justify-center bg-nuit-700">
                     {p.image ? (
-                      <img src={p.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      <>
+                        <img src={p.image} alt="" width={960} height={540} loading="lazy" className="h-full w-full object-cover" />
+                        <span className="absolute bottom-3 left-3 flex h-11 w-11 items-center justify-center rounded-xl bg-nuit-900/85 shadow-[0_3px_0_#050b1c]">
+                          <Icon className="h-6 w-6 text-or" strokeWidth={2.2} aria-hidden="true" />
+                        </span>
+                      </>
                     ) : (
                       <Icon className="h-16 w-16 text-or drop-shadow-[0_4px_0_var(--color-brique)]" strokeWidth={2} aria-hidden="true" />
                     )}
@@ -208,9 +219,19 @@ export default function HomePage() {
                 Chaque échange se fait face à face, dans l'ombre des ruelles ou au cœur des plaines. Le vol et les traquenards font partie du jeu.
               </p>
             </div>
-            <blockquote className="min-w-0 flex-[1_1_18rem] font-display text-[clamp(1.75rem,3vw,2.4rem)] leading-tight text-or">
-              Un coffre plein ne se vend pas. Il se défend.
-            </blockquote>
+            <figure className="min-w-0 flex-[1_1_22rem]">
+              <img
+                src="/images/piliers/commerce.webp"
+                alt="Rue pavée éclairée de lanternes dans un village médiéval"
+                width={960}
+                height={540}
+                loading="lazy"
+                className="aspect-[4/3] w-full rounded-2xl border-2 border-or/30 object-cover"
+              />
+              <blockquote className="mt-5 font-display text-[clamp(1.6rem,2.6vw,2.2rem)] leading-tight text-or">
+                Un coffre plein ne se vend pas. Il se défend.
+              </blockquote>
+            </figure>
           </div>
         </SectionReveal>
       </section>
