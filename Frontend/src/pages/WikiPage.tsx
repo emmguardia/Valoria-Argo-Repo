@@ -37,7 +37,7 @@ const WIKI_SECTIONS = [
   {
     icon: Book,
     title: 'Commandes utiles',
-    content: '/menu - Tout le serveur en un menu\n/tuto - Le tutoriel et ses récompenses\n/creerfaction - Fonder une faction\n/f join <faction> - Rejoindre une faction\n/f home - Retour au QG\n/rangs - Monter de rang\n/siege aide - Les sièges expliqués\n/spawn - Retour au spawn',
+    content: '/menu - Tout le serveur en un menu\n/tuto - Le tutoriel et ses récompenses\n/creerfaction - Fonder une faction\n/f join <faction> - Rejoindre une faction\n/f home - Retour au QG\n/rangs - Monter de rang\n/siege aide - Les sièges expliqués\n/spawn - Retour au spawn\n/signaler <joueur> - Prévenir le staff (triche, insultes…)',
   },
 ];
 
