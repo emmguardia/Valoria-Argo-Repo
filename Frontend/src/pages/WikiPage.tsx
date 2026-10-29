@@ -1,4 +1,5 @@
-import { Swords, Hammer, Coins, Sparkles, Fish, Book } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Swords, Hammer, Coins, Sparkles, Fish, Book, Castle } from 'lucide-react';
 import SEO from '../components/SEO';
 
 const WIKI_SECTIONS = [
@@ -11,6 +12,12 @@ const WIKI_SECTIONS = [
     icon: Hammer,
     title: "L'Héritage de la Forge et des Champs",
     content: "Les métiers : bûcheron, chasseur, fermier, mineur et pêcheur, chacun jusqu'au niveau 100.\n\nLe bâton de vente revend le contenu d'un coffre d'un seul clic.\n\nLes armures de set : Farm (Vitesse II et vision nocturne), Combattant (Célérité II), Guerrier (+2 cœurs), Souverain (+2 cœurs et Célérité II).",
+  },
+  {
+    icon: Castle,
+    title: 'Les Sièges et le Trésor',
+    content: "Ta bannière protège le cœur de ta base, ton Trésor rapporte des points chaque jour. Pour prendre une base, on déclare un siège 24 h à l'avance, on tient la bannière adverse, puis le vaincu paie une rançon ou se fait piller.",
+    link: { to: '/wiki/sieges', label: 'Lire le guide des sièges' },
   },
   {
     icon: Coins,
@@ -30,7 +37,7 @@ const WIKI_SECTIONS = [
   {
     icon: Book,
     title: 'Commandes utiles',
-    content: '/f create <nom> - Créer une faction\n/f join <faction> - Rejoindre une faction\n/f home - Retour au QG\n/spawn - Retour au spawn\n/kit starter - Kit de démarrage (cooldown)',
+    content: '/menu - Tout le serveur en un menu\n/tuto - Le tutoriel et ses récompenses\n/creerfaction - Fonder une faction\n/f join <faction> - Rejoindre une faction\n/f home - Retour au QG\n/rangs - Monter de rang\n/siege aide - Les sièges expliqués\n/spawn - Retour au spawn',
   },
 ];
 
@@ -39,7 +46,7 @@ export default function WikiPage() {
     <div className="valoria-page-shell">
       <SEO
         title="Wiki"
-        description="Wiki Valoria : les 9 nations et leurs bonus, les métiers, les armures, le commerce et les commandes utiles."
+        description="Wiki Valoria : les 9 nations et leurs bonus, les sièges et le Trésor, les métiers, les armures, le commerce et les commandes utiles."
         keywords="wiki, Valoria, Minecraft, guide, Chroniques"
         url="/wiki"
       />
@@ -65,6 +72,11 @@ export default function WikiPage() {
                   <div>
                     <h2 className="font-display text-xl text-gray-900 mb-2">{section.title}</h2>
                     <p className="valoria-text-muted whitespace-pre-line">{section.content}</p>
+                    {section.link && (
+                      <Link to={section.link.to} className="inline-block mt-3 font-semibold text-[#1e3a5f] underline">
+                        {section.link.label}
+                      </Link>
+                    )}
                   </div>
                 </div>
               </article>
