@@ -15,7 +15,7 @@ const SECTIONS = [
     icon: Gem,
     title: '2. Le Trésor',
     content:
-      "Tape /tresor pour recevoir le tonneau du Trésor, et pose-le dans tes terres à moins de 8 blocs de la bannière. Un tonneau normal ne compte pas.\n\nChaque jour, ce que tu y ranges rapporte des points de saison à ta faction (selon le prix de vente au shop, avec un plafond). Les reliques, comme l'œuf du dragon, rapportent des points en plus. Le Trésor est incassable : seul un siège gagné permet de l'ouvrir.",
+      "Tape /tresor pour recevoir le tonneau du Trésor, et pose-le dans tes terres à moins de 8 blocs de la bannière. Un tonneau normal ne compte pas.\n\nChaque jour, ce que tu y ranges rapporte des points de saison à ta faction (selon le prix de vente au shop, avec un plafond). Les reliques, comme l'œuf du dragon, rapportent des points en plus. Le Trésor est incassable : seul un siège gagné permet de l'ouvrir. Dès qu'un siège commence contre ta faction, il est scellé : tu ne peux plus le vider, ni à la main ni avec un entonnoir, jusqu'à la fin.",
   },
   {
     icon: Bomb,
@@ -51,7 +51,7 @@ const SECTIONS = [
     icon: ShieldAlert,
     title: '8. Ce qui est interdit pendant un siège',
     content:
-      "Du moment où un siège est déclaré jusqu'à la fin du pillage, la faction ne peut ni se dissoudre, ni abandonner ses terres, et personne ne la quitte. Les défenseurs n'ont plus accès à leur ender chest pendant le siège, la rançon et le pillage.",
+      "Du moment où un siège est déclaré jusqu'à la fin du pillage, la faction ne peut ni se dissoudre, ni abandonner ses terres, et personne ne la quitte. Pendant le siège, la rançon et le pillage, les défenseurs n'ont plus accès à leur ender chest ni à leur Trésor. Leurs coffres normaux, eux, peuvent être vidés tant que le siège n'est pas perdu.",
   },
 ];
 
