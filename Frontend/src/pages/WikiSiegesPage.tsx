@@ -21,7 +21,7 @@ const SECTIONS = [
     icon: Bomb,
     title: '3. Le raid, sans siège',
     content:
-      "Hors siège, un claim ennemi se raide comme sur tout serveur faction : creepers (les œufs de creeper s'utilisent chez l'ennemi) et canons à TNT tirés de l'extérieur. On ne peut rien poser ni ouvrir chez l'ennemi.\n\nUne base sans obsidienne et facile d'accès peut donc se faire piller sans siège. La bannière, son support et le Trésor restent intacts.",
+      "Hors siège, un claim ennemi se raide comme sur tout serveur faction : creepers (les œufs de creeper s'utilisent chez l'ennemi) et canons à TNT tirés de l'extérieur. On ne peut rien poser ni ouvrir chez l'ennemi.\n\nUne base sans obsidienne et facile d'accès peut donc se faire piller sans siège. La bannière, son support et le Trésor restent intacts.\n\nPour trouver une base, achète un détecteur au shop (Divers). Clic droit : le pourcentage monte quand tu t'approches du coffre le plus proche, et il te dit s'il est en dessous ou au-dessus de toi. Le basique cherche à 16 blocs, l'avancé à 32.",
   },
   {
     icon: CalendarClock,
