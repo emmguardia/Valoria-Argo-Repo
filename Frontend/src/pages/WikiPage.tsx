@@ -6,7 +6,7 @@ const WIKI_SECTIONS = [
   {
     icon: Swords,
     title: "L'Appel des Nations",
-    content: "Ta faction rejoint l'une des neuf nations, et tous ses membres profitent de son bonus permanent. Une nation accueille jusqu'à 10 factions.\n\nFrancs : +4 % de dégâts\nAnglo-Saxons : +8 % de dégâts à l'arc\nVikings : +9 % de vitesse\nChine médiévale : Célérité I et vision nocturne\nBohémiens : -20 % de dégâts subis\nBretons : une potion d'invisibilité toutes les 48 h\nAragonais : +12 % de recul et résistance au feu\nTurcs seldjoukides : Chance IV et +8 % de dégâts critiques\nByzantins : -25 % de dégâts d'explosion",
+    content: "Ta faction rejoint l'une des neuf nations, et tous ses membres profitent de son bonus permanent. Une nation accueille jusqu'à 10 factions.\n\nUne faction compte 15 membres au plus et peut avoir un seul allié, de n'importe quelle nation. Chaque membre apporte jusqu'à 10 de power (4 perdus par mort, 1 regagné toutes les 5 minutes) : une terre par point. Si ta faction a plus de terres que de power, les autres peuvent te les prendre (overclaim), sauf le cœur autour de ta bannière.\n\nFrancs : +4 % de dégâts\nAnglo-Saxons : +8 % de dégâts à l'arc\nVikings : +9 % de vitesse\nChine médiévale : Célérité I et vision nocturne\nBohémiens : -20 % de dégâts subis\nBretons : une potion d'invisibilité toutes les 48 h\nAragonais : +12 % de recul et résistance au feu\nTurcs seldjoukides : Chance IV et +8 % de dégâts critiques\nByzantins : -25 % de dégâts d'explosion",
   },
   {
     icon: Hammer,
