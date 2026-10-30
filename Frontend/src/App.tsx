@@ -10,6 +10,7 @@ const VotesPage = lazy(() => import('./pages/VotesPage'));
 const ClassementPage = lazy(() => import('./pages/ClassementPage'));
 const WikiPage = lazy(() => import('./pages/WikiPage'));
 const WikiSiegesPage = lazy(() => import('./pages/WikiSiegesPage'));
+const WikiNationsPage = lazy(() => import('./pages/WikiNationsPage'));
 const ConnexionPage = lazy(() => import('./pages/ConnexionPage'));
 const EcusPage = lazy(() => import('./pages/EcusPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
@@ -59,6 +60,7 @@ function App() {
               <Route path="/classement" element={<ClassementPage />} />
               <Route path="/wiki" element={<WikiPage />} />
               <Route path="/wiki/sieges" element={<WikiSiegesPage />} />
+              <Route path="/wiki/nations" element={<WikiNationsPage />} />
               <Route path="/connexion" element={<ConnexionPage />} />
               <Route path="/ecus" element={<EcusPage />} />
               <Route path="/profile" element={<ProfilePage />} />

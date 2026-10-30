@@ -72,15 +72,15 @@ const PILIERS: Pilier[] = [
 ];
 
 const NATIONS = [
-  { name: 'Francs', bonus: '+4 % de dégâts' },
-  { name: 'Anglo-Saxons', bonus: "+8 % de dégâts à l'arc" },
-  { name: 'Vikings', bonus: '+9 % de vitesse' },
+  { name: 'Francs', bonus: '+6 % de dégâts' },
+  { name: 'Anglo-Saxons', bonus: "+10 % de dégâts à l'arc" },
+  { name: 'Vikings', bonus: '+8 % de vitesse' },
   { name: 'Chine médiévale', bonus: 'Célérité I et vision nocturne' },
-  { name: 'Bohémiens', bonus: '-20 % de dégâts subis' },
-  { name: 'Bretons', bonus: "Une potion d'invisibilité toutes les 48 h" },
-  { name: 'Aragonais', bonus: '+12 % de recul et résistance au feu' },
-  { name: 'Turcs seldjoukides', bonus: 'Chance IV et +8 % de dégâts critiques' },
-  { name: 'Byzantins', bonus: "-25 % de dégâts d'explosion" },
+  { name: 'Bohémiens', bonus: '-6 % de dégâts subis' },
+  { name: 'Bretons', bonus: "Une potion d'invisibilité toutes les 24 h" },
+  { name: 'Aragonais', bonus: '+12 % de recul et -50 % de dégâts de feu' },
+  { name: 'Turcs seldjoukides', bonus: 'Chance II et +8 % de dégâts critiques' },
+  { name: 'Byzantins', bonus: "-30 % de dégâts d'explosion" },
 ];
 
 const ETAPES = [
