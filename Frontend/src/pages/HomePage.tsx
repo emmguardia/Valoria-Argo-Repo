@@ -42,7 +42,7 @@ const PILIERS: Pilier[] = [
   {
     tag: '4 armures',
     title: 'Les Parures de Guerre',
-    text: 'Farm pour la vitesse et la vision nocturne, Combattant pour la Célérité, Guerrier pour deux cœurs de plus, Souverain pour les deux.',
+    text: 'Samouraï pour frapper plus fort, Chevalier pour deux cœurs de plus, Paladin pour encaisser, Souverain pour les dégâts et la vie réunis.',
     icon: Shield,
     image: '/images/piliers/armures.webp',
   },

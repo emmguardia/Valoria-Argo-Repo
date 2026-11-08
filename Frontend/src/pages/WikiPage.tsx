@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Swords, Hammer, Coins, Sparkles, Fish, Book, Castle } from 'lucide-react';
+import { Swords, Hammer, Coins, Sparkles, Fish, Book, Castle, Shield } from 'lucide-react';
 import SEO from '../components/SEO';
 
 const WIKI_SECTIONS = [
@@ -12,7 +12,12 @@ const WIKI_SECTIONS = [
   {
     icon: Hammer,
     title: "L'Héritage de la Forge et des Champs",
-    content: "Les métiers : bûcheron, chasseur, fermier, mineur et pêcheur, chacun jusqu'au niveau 100.\n\nLe bâton de vente revend le contenu d'un coffre d'un seul clic.\n\nLes armures de set : Farm (Vitesse II et vision nocturne), Combattant (Célérité II), Guerrier (+2 cœurs), Souverain (+2 cœurs et Célérité II).",
+    content: "Les métiers : bûcheron, chasseur, fermier, mineur et pêcheur, chacun jusqu'au niveau 100.\n\nLe bâton de vente revend le contenu d'un coffre d'un seul clic.\n\nLe monde minage (réservé aux Écuyers et plus) est remis à neuf chaque lundi à 4 h, sans PvP.",
+  },
+  {
+    icon: Shield,
+    title: 'Les Armures',
+    content: "Une armure ne donne son bonus que si tu portes les 4 pièces.\n\nSamouraï : +10 % de dégâts (coups et tirs)\nChevalier : +2 cœurs\nPaladin : -10 % de dégâts subis\nSouverain : +10 % de dégâts et +2 cœurs, la plus dure à obtenir\n\nLes pièces se fabriquent avec les trésors de la Dimension Éphémère. L'armure du Souverain demande des fragments, qui tombent pendant les events et sur les boss.",
   },
   {
     icon: Castle,
@@ -27,8 +32,8 @@ const WIKI_SECTIONS = [
   },
   {
     icon: Sparkles,
-    title: 'Les Failles et le Chaos (bientôt)',
-    content: "La Dimension Éphémère : une faille vers un lieu oublié, ses créatures et ses reliques.\n\nLes KOTH et l'arène FFA : se disputer une zone, ou survivre jusqu'au dernier.\n\nCes modes sont en préparation.",
+    title: 'Les Events',
+    content: "Chaque soir à 19 h, un airdrop tombe en warzone (/warzone) : 8 à 12 coffres à récupérer en 15 minutes, PvP actif.\n\nEn préparation, avec leurs horaires (21 h) :\nKOTH : mardi et samedi, tenir la zone 20 minutes\nFFA anonyme : mercredi, même kit pour tous\nTotem : jeudi, la faction qui le détruit gagne\nDimension Éphémère : dimanche 18 h, une faille vers un lieu oublié, ses créatures, son boss et ses reliques, sans PvP\nOutposts : toujours ouverts, la faction qui les tient gagne un bonus chaque heure\n\nLe vendredi reste libre pour les sièges.",
   },
   {
     icon: Fish,
@@ -38,7 +43,7 @@ const WIKI_SECTIONS = [
   {
     icon: Book,
     title: 'Commandes utiles',
-    content: '/menu - Tout le serveur en un menu\n/tuto - Le tutoriel et ses récompenses\n/f create - Fonder une faction\n/f join <faction> - Rejoindre une faction\n/f home - Retour au QG\n/rangs - Monter de rang\n/siege aide - Les sièges expliqués\n/spawn - Retour au spawn\n/signaler <joueur> - Prévenir le staff (triche, insultes…)',
+    content: '/menu - Tout le serveur en un menu\n/tuto - Le tutoriel et ses récompenses\n/f create - Fonder une faction\n/f join <faction> - Rejoindre une faction\n/f home - Retour au QG\n/rangs - Monter de rang\n/siege aide - Les sièges expliqués\n/spawn - Retour au spawn\n/warzone - La zone de combat et l\'airdrop\n/rules - Le règlement\n/signaler <joueur> - Prévenir le staff (triche, insultes…)',
   },
 ];
 
@@ -47,7 +52,7 @@ export default function WikiPage() {
     <div className="valoria-page-shell">
       <SEO
         title="Wiki"
-        description="Wiki Valoria : les 9 nations et leurs bonus, les sièges et le Trésor, les métiers, les armures, le commerce et les commandes utiles."
+        description="Wiki Valoria : les 9 nations et leurs bonus, les sièges et le Trésor, les métiers, les armures, les events, le commerce et les commandes utiles."
         keywords="wiki, Valoria, Minecraft, guide, Chroniques"
         url="/wiki"
       />
