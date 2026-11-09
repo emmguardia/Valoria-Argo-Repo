@@ -41,7 +41,8 @@ frontend:
 backend:
   image: ghcr.io/emmguardia/valoria-back@sha256:e4a72c0011b4204f96c99133dde31287a95c59e35b62a80d6c8584feac98bd7a
   imagePullPolicy: IfNotPresent
-  replicas: 1
+  # 2 réplicas sur 2 nœuds différents (topologySpreadConstraints + PodDisruptionBudget)
+  replicas: 2
   port: 3000
   resources:
     requests:

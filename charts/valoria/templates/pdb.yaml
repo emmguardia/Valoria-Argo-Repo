@@ -1,0 +1,26 @@
+# Au moins un front et un backend restent en ligne pendant une maintenance de nœud (drain, mise à jour k3s).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: valoria-front-pdb
+  namespace: {{ include "valoria.namespace" . }}
+  labels:
+    {{- include "valoria.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: valoria-front
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: valoria-backend-pdb
+  namespace: {{ include "valoria.namespace" . }}
+  labels:
+    {{- include "valoria.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: valoria-backend

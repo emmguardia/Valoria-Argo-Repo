@@ -21,11 +21,11 @@ spec:
       labels:
         app: valoria-front
     spec:
-      # 2 réplicas répartis sur 2 nœuds : la perte d'un nœud ne coupe pas le site.
+      # Réplicas toujours sur des nœuds différents (un nœud k3s par hôte Proxmox) : la perte d'un hôte ne coupe pas le site.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app: valoria-front
