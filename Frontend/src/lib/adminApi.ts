@@ -15,7 +15,37 @@ async function request<T>(url: string, token: string | null, init: RequestInit =
   return payload as T;
 }
 
+export interface ServerStatus {
+  lastHeartbeat: { at: string; onlinePlayers: number; pluginVersion: string | null } | null;
+  commands: Record<string, number>;
+}
+export interface ServerCommand {
+  id: number; mc_uuid: string | null; mc_username: string | null; command_text: string; require_online: number;
+  source: string; source_id: string | null; status: string; attempts: number; last_error: string | null;
+  created_at: string; sent_at: string | null; done_at: string | null;
+}
+export interface ServerCommandEvent { event: string; detail: string | null; created_at: string }
+export interface LedgerEntry {
+  id: number; user_id: number; pseudo: string; delta: number; balance_after: number; reason: string; origin: string;
+  ref_type: string | null; ref_id: string | null; detail: string | null; created_at: string;
+}
+
 export const adminApi = {
+  // Serveur Minecraft : état de la liaison, file de commandes, historique, registre des Écus
+  serverStatus: (token: string | null) => request<ServerStatus>('/api/admin/server-status', token),
+  listServerCommands: (token: string | null, params: { status?: string; player?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.player) qs.set('player', params.player);
+    return request<{ items: ServerCommand[] }>(`/api/admin/server-commands?${qs.toString()}`, token);
+  },
+  serverCommand: (token: string | null, id: number) =>
+    request<{ command: ServerCommand; events: ServerCommandEvent[] }>(`/api/admin/server-commands/${id}`, token),
+  serverCommandAction: (token: string | null, id: number, action: 'retry' | 'cancel') =>
+    request<{ ok: true }>(`/api/admin/server-commands/${id}/${action}`, token, { method: 'POST' }),
+  ledger: (token: string | null, userId?: number) =>
+    request<{ items: LedgerEntry[] }>(`/api/admin/ledger${userId ? `?user=${userId}` : ''}`, token),
+
   // Users
   listUsers: (token: string | null, params: { page?: number; limit?: number; search?: string } = {}) => {
     const qs = new URLSearchParams();

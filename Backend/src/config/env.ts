@@ -17,6 +17,8 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(10).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(10).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(10).optional(),
+  // Jeton partagé avec le plugin du serveur Minecraft : il protège /api/server (le serveur vient chercher ses commandes).
+  VALORIA_SERVER_TOKEN: z.string().min(32).optional(),
   RCON_HOST: z.string().min(1).optional(),
   RCON_PORT: z.coerce.number().int().positive().optional(),
   RCON_PASSWORD: z.string().min(1).optional(),

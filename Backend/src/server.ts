@@ -6,8 +6,8 @@ import { paymentsRouter } from './routes/paymentsRoutes.js';
 import { productsRouter } from './routes/productsRoutes.js';
 import { adminRouter } from './routes/adminRoutes.js';
 import { voteRouter } from './routes/voteRoutes.js';
-import { startEcusSyncWorker } from './services/ecusSyncService.js';
-import { getRconRuntimeFingerprint } from './services/rconService.js';
+import { serverRouter } from './routes/serverRoutes.js';
+import { shopRouter } from './routes/shopRoutes.js';
 
 const app = express();
 app.set('trust proxy', env.TRUST_PROXY);
@@ -22,9 +22,10 @@ app.use('/api/payments', paymentsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/votes', voteRouter);
+app.use('/api/shop', shopRouter);
+// Réservé au serveur Minecraft (jeton partagé) : il vient chercher ses commandes, le site ne l'appelle jamais
+app.use('/api/server', serverRouter);
 
 app.listen(env.PORT, () => {
   console.log(`Valoria backend listening on :${env.PORT}`);
-  console.log('[RCON runtime]', getRconRuntimeFingerprint());
-  startEcusSyncWorker();
 });

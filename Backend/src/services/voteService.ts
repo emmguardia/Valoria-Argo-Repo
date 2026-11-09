@@ -1,6 +1,6 @@
 import { env } from '../config/env.js';
 import { getDbPool } from '../db/mysql.js';
-import { withRcon } from './rconService.js';
+import { enqueueCommand } from './serverQueueService.js';
 
 function buildVoteRewardCommand(mcUsername: string): string {
   if (!/^[a-zA-Z0-9_]{2,32}$/.test(mcUsername)) {
@@ -35,15 +35,19 @@ export async function recordVoteAndReward(args: {
     throw error;
   }
 
-  // 3. RCON /fvote add — best effort, on log l'erreur dans la ligne vote.
+  // 3. Récompense mise en file pour le serveur Minecraft (il la tire et l'exécute, même si le joueur est hors ligne :
+  //    FoxVotes compte le vote). La ligne vote garde le numéro de la commande pour le suivi.
   const command = buildVoteRewardCommand(args.mcUsername);
+  const conn = await db.getConnection();
   try {
-    await withRcon(async (send) => send(command));
-    await db.execute(
-      `UPDATE votes SET rcon_status = 'sent' WHERE site_name = ? AND mc_username = ? AND voted_day = CURRENT_DATE()`,
-      [args.siteName, args.mcUsername]
+    const commandId = await enqueueCommand(conn, {
+      command, uuid: null, name: args.mcUsername, requireOnline: false, source: 'vote', sourceId: args.siteName,
+    });
+    await conn.execute(
+      `UPDATE votes SET rcon_status = 'queued', rcon_error = ? WHERE site_name = ? AND mc_username = ? AND voted_day = CURRENT_DATE()`,
+      [`commande ${commandId}`, args.siteName, args.mcUsername]
     );
-    console.log(`[vote] site=${args.siteName} user=${args.mcUsername} → counted + rewarded`);
+    console.log(`[vote] site=${args.siteName} user=${args.mcUsername} → counted, commande ${commandId} en file`);
     return { inserted: true, rconOk: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
@@ -51,8 +55,10 @@ export async function recordVoteAndReward(args: {
       `UPDATE votes SET rcon_status = 'failed', rcon_error = ? WHERE site_name = ? AND mc_username = ? AND voted_day = CURRENT_DATE()`,
       [message.slice(0, 500), args.siteName, args.mcUsername]
     );
-    console.log(`[vote] site=${args.siteName} user=${args.mcUsername} → counted but RCON failed: ${message}`);
-    return { inserted: true, rconOk: false, reason: `rcon_failed:${message}` };
+    console.log(`[vote] site=${args.siteName} user=${args.mcUsername} → counted but queue failed: ${message}`);
+    return { inserted: true, rconOk: false, reason: `queue_failed:${message}` };
+  } finally {
+    conn.release();
   }
 }
 

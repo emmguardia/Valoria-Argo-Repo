@@ -6,7 +6,7 @@ import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { getDbPool } from '../db/mysql.js';
 import { claimReward, listPendingRewardsForUser } from '../services/rewardDeliveryService.js';
-import { enqueueEcusSync } from '../services/ecusSyncService.js';
+import { writeLedger } from '../services/shopService.js';
 import { paymentsLimiter, webhookLimiter } from '../middleware/rateLimitMiddleware.js';
 
 export const paymentsRouter = Router();
@@ -158,9 +158,14 @@ async function persistPaidSession(session: Stripe.Checkout.Session) {
     );
     const [updatedRows] = await conn.execute('SELECT ecus FROM users WHERE id = ? LIMIT 1', [userId]);
     const newEcus = Array.isArray(updatedRows) && updatedRows.length > 0 ? Number((updatedRows[0] as any).ecus ?? 0) : 0;
+    await writeLedger(conn, {
+      userId: Number(userId), delta: ecus, balanceAfter: newEcus, reason: 'paiement_stripe', origin: 'stripe',
+      refType: 'stripe_session', refId: session.id, detail: `${amountCents / 100} ${currency.toUpperCase()}`,
+    });
     await conn.commit();
-
-    await enqueueEcusSync(String(userId), String(mcUsername));
+    // Le solde en jeu suit tout seul : le serveur le reçoit à chaque tirage (/api/server/poll)
+    console.log(JSON.stringify({ evt: 'boutique', etape: 'paiement-stripe', userId: Number(userId), ecus, solde: newEcus,
+      session: session.id, ts: new Date().toISOString() }));
 
     return { duplicated: false, credited: ecus, ecus: newEcus };
   } catch (error) {

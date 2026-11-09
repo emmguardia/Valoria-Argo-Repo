@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { User, Mail, Coins, ShoppingBag, Trash2, AlertTriangle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { User, Mail, Coins, Trash2, AlertTriangle } from 'lucide-react';
 import SEO from '../components/SEO';
+import ShopAccount from '../components/ShopAccount';
 import { useUser } from '../context/UserContext';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { isLoggedIn, ecus, profile, purchaseHistory, updateProfile, deleteAccount } = useUser();
+  const { isLoggedIn, ecus, profile, updateProfile, deleteAccount } = useUser();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editPseudo, setEditPseudo] = useState(profile?.pseudo ?? '');
   const [editEmail, setEditEmail] = useState(profile?.email ?? '');
@@ -28,8 +29,6 @@ export default function ProfilePage() {
     navigate('/');
   };
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-[#fefce8]">
@@ -141,37 +140,8 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Historique d'achats */}
-          <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 p-8">
-            <h2 className="font-display text-xl text-gray-900 mb-6 flex items-center gap-2">
-              <ShoppingBag className="w-6 h-6 text-[#1e3a5f]" />
-              Historique d'achats
-            </h2>
-            {purchaseHistory.length > 0 ? (
-              <ul className="space-y-3">
-                {purchaseHistory.map((p, i) => (
-                  <li
-                    key={`${p.productId}-${p.date}-${i}`}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900">{p.productName}</p>
-                      <p className="text-sm text-gray-500">{formatDate(p.date)}</p>
-                    </div>
-                    <span className="font-semibold text-[#1e3a5f]">{p.price} Écus</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500 py-8 text-center">Aucun achat pour le moment.</p>
-            )}
-            <Link
-              to="/boutique"
-              className="mt-6 inline-block px-6 py-3 rounded-xl bg-[#1e3a5f] text-white font-semibold hover:bg-[#152a45] transition-colors"
-            >
-              Voir la boutique
-            </Link>
-          </div>
+          {/* Liaison au jeu, achats et leur livraison, mouvements d'Écus (données du serveur) */}
+          <ShopAccount />
 
           {/* Suppression du compte */}
           <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-red-100 p-8">

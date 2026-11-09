@@ -24,6 +24,7 @@ const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage'));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
 const AdminRewardJobsPage = lazy(() => import('./pages/admin/AdminRewardJobsPage'));
+const AdminServerPage = lazy(() => import('./pages/admin/AdminServerPage'));
 const RequireAdmin = lazy(() => import('./components/admin/RequireAdmin'));
 
 function ScrollToTop() {
@@ -73,6 +74,7 @@ function App() {
                 <Route path="users" element={<AdminUsersPage />} />
                 <Route path="payments" element={<AdminPaymentsPage />} />
                 <Route path="reward-jobs" element={<AdminRewardJobsPage />} />
+                <Route path="serveur" element={<AdminServerPage />} />
               </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

@@ -33,6 +33,7 @@ export function useProducts() {
         const items = (payload.items || []) as ApiProduct[];
         const mapped: Product[] = items.map((p) => ({
           id: p.id,
+          slug: p.slug,
           name: p.name,
           price: p.priceEcus,
           image: p.imageUrl?.trim() ? p.imageUrl : placeholderImage(p.name),

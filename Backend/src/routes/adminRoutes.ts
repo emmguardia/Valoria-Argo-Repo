@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getDbPool } from '../db/mysql.js';
+import { writeLedger } from '../services/shopService.js';
+import { logCommandEvent } from '../services/serverQueueService.js';
 import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
 import { authReadLimiter, authWriteLimiter } from '../middleware/rateLimitMiddleware.js';
 
@@ -164,11 +166,15 @@ adminRouter.post('/users/:id/ecus', authWriteLimiter, async (req, res) => {
       return res.status(409).json({ error: 'Solde écus ne peut pas devenir négatif' });
     }
     await conn.execute('UPDATE users SET ecus = ? WHERE id = ?', [next, id]);
-    await conn.execute(
+    const [adj] = await conn.execute(
       `INSERT INTO ecus_adjustments (user_id, admin_id, delta, reason, balance_after)
        VALUES (?, ?, ?, ?, ?)`,
       [id, adminId, delta, reason, next]
     );
+    await writeLedger(conn, {
+      userId: id, delta, balanceAfter: next, reason: 'ajustement_admin', origin: 'admin',
+      refType: 'ecus_adjustment', refId: String((adj as any).insertId), detail: `admin ${adminId} : ${reason}`,
+    });
     await conn.commit();
     console.log(`[admin/ecus] admin=${adminId} user=${id} delta=${delta} balance=${next} reason="${reason}"`);
     return res.json({ ok: true, balance: next, delta });
@@ -489,6 +495,113 @@ adminRouter.get('/ecus-adjustments', authReadLimiter, async (req, res) => {
     return res.json({ items, total, page, limit });
   } catch (error) {
     console.error('[admin/ecus-adjustments GET] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SUIVI DU SERVEUR MINECRAFT : file de commandes, historique, registre des Écus
+// ═══════════════════════════════════════════════════════════════
+
+/** État de la liaison avec le serveur : dernier passage, commandes en attente, en échec. */
+adminRouter.get('/server-status', authReadLimiter, async (_req, res) => {
+  try {
+    const db = await getDbPool();
+    const [hb] = await db.execute('SELECT online_players, plugin_version, created_at FROM server_heartbeats ORDER BY id DESC LIMIT 1');
+    const [counts] = await db.execute('SELECT status, COUNT(*) AS n FROM server_commands GROUP BY status');
+    const last = (hb as any[])[0] ?? null;
+    return res.json({
+      lastHeartbeat: last ? { at: last.created_at, onlinePlayers: Number(last.online_players), pluginVersion: last.plugin_version } : null,
+      commands: Object.fromEntries((counts as any[]).map((c) => [c.status, Number(c.n)])),
+    });
+  } catch (error) {
+    console.error('[admin/server-status] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+adminRouter.get('/server-commands', authReadLimiter, async (req, res) => {
+  const status = typeof req.query.status === 'string' ? req.query.status : null;
+  const player = typeof req.query.player === 'string' ? req.query.player.trim() : '';
+  const where: string[] = [];
+  const params: any[] = [];
+  if (status && ['pending', 'sent', 'done', 'failed', 'cancelled'].includes(status)) { where.push('status = ?'); params.push(status); }
+  if (player) { where.push('(mc_username = ? OR mc_uuid = ?)'); params.push(player, player); }
+  try {
+    const db = await getDbPool();
+    const [rows] = await db.execute(
+      `SELECT id, mc_uuid, mc_username, command_text, require_online, source, source_id, status, attempts,
+              last_error, created_at, sent_at, done_at
+       FROM server_commands ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT 200`, params);
+    return res.json({ items: rows });
+  } catch (error) {
+    console.error('[admin/server-commands] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/** Une commande et tout son historique (créée, envoyée, renvoyée, exécutée, échec…). */
+adminRouter.get('/server-commands/:id', authReadLimiter, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Id invalide' });
+  try {
+    const db = await getDbPool();
+    const [rows] = await db.execute('SELECT * FROM server_commands WHERE id = ?', [id]);
+    if (!(rows as any[])[0]) return res.status(404).json({ error: 'Commande introuvable' });
+    const [events] = await db.execute('SELECT event, detail, created_at FROM server_command_events WHERE command_id = ? ORDER BY id', [id]);
+    return res.json({ command: (rows as any[])[0], events });
+  } catch (error) {
+    console.error('[admin/server-commands/:id] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/** Remettre en file une commande en échec, ou l'annuler. Chaque geste de l'admin est noté dans l'historique. */
+adminRouter.post('/server-commands/:id/:action', authWriteLimiter, async (req, res) => {
+  const id = Number(req.params.id);
+  const action = req.params.action;
+  if (!Number.isInteger(id) || id <= 0 || !['retry', 'cancel'].includes(action)) return res.status(400).json({ error: 'Requête invalide' });
+  const adminId = Number((req as any).user.userId);
+  try {
+    const db = await getDbPool();
+    const [result] = action === 'retry'
+      ? await db.execute(`UPDATE server_commands SET status = 'pending', attempts = 0, lease_until = NULL WHERE id = ? AND status IN ('failed','cancelled')`, [id])
+      : await db.execute(`UPDATE server_commands SET status = 'cancelled', lease_until = NULL WHERE id = ? AND status IN ('pending','failed')`, [id]);
+    if ((result as any).affectedRows === 0) return res.status(409).json({ error: 'Impossible dans cet état' });
+    await logCommandEvent(db, id, action === 'retry' ? 'relancee' : 'annulee', `par l'admin ${adminId}`);
+    console.log(JSON.stringify({ evt: 'boutique', etape: `admin-${action}`, commandId: id, adminId, ts: new Date().toISOString() }));
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('[admin/server-commands action] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/** Registre des Écus (tous les joueurs, ou un seul avec ?user=<id>). */
+adminRouter.get('/ledger', authReadLimiter, async (req, res) => {
+  const userId = Number(req.query.user);
+  try {
+    const db = await getDbPool();
+    const [rows] = Number.isInteger(userId) && userId > 0
+      ? await db.execute(`SELECT l.*, u.pseudo FROM ecus_ledger l JOIN users u ON u.id = l.user_id WHERE l.user_id = ? ORDER BY l.id DESC LIMIT 500`, [userId])
+      : await db.execute(`SELECT l.*, u.pseudo FROM ecus_ledger l JOIN users u ON u.id = l.user_id ORDER BY l.id DESC LIMIT 500`);
+    return res.json({ items: rows });
+  } catch (error) {
+    console.error('[admin/ledger] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+adminRouter.get('/purchases', authReadLimiter, async (_req, res) => {
+  try {
+    const db = await getDbPool();
+    const [rows] = await db.execute(
+      `SELECT pp.*, sc.status AS delivery, sc.attempts, sc.done_at, sc.last_error
+       FROM product_purchases pp LEFT JOIN server_commands sc ON sc.id = pp.server_command_id
+       ORDER BY pp.id DESC LIMIT 500`);
+    return res.json({ items: rows });
+  } catch (error) {
+    console.error('[admin/purchases] error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Package, Users, CreditCard, Gift, LayoutDashboard, Shield } from 'lucide-react';
+import { Package, Users, CreditCard, Gift, LayoutDashboard, Shield, Server } from 'lucide-react';
 import SEO from '../SEO';
 
 const links = [
@@ -7,7 +7,8 @@ const links = [
   { to: '/admin/products', label: 'Produits', icon: Package },
   { to: '/admin/users', label: 'Utilisateurs', icon: Users },
   { to: '/admin/payments', label: 'Paiements', icon: CreditCard },
-  { to: '/admin/reward-jobs', label: 'Livraisons', icon: Gift },
+  { to: '/admin/serveur', label: 'Serveur et livraisons', icon: Server },
+  { to: '/admin/reward-jobs', label: 'Anciennes livraisons', icon: Gift },
 ];
 
 export default function AdminLayout() {

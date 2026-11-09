@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import type { Product } from '../data/products';
 import EcuIcon from './EcuIcon';
@@ -14,12 +14,39 @@ interface ProductModalProps {
 
 export default function ProductModal({ product, isOpen, onClose, onPurchaseSuccess }: ProductModalProps) {
   const navigate = useNavigate();
-  const { isLoggedIn, ecus, spendEcus, addPurchase } = useUser();
+  const { isLoggedIn, ecus, token, refreshUserData } = useUser();
   const [showConfirm, setShowConfirm] = useState(false);
+  // Prix pour ce joueur (montée en gamme VIP -> VIP+, déjà possédé), donné par le serveur
+  const [offer, setOffer] = useState<{ price: number; owned: boolean; upgrade: boolean } | null>(null);
+  // Un identifiant par ouverture : un double clic ou un renvoi ne paie jamais deux fois
+  const [requestId, setRequestId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<{ text: string; needsLink: boolean } | null>(null);
+  const [done, setDone] = useState<{ price: number; balance: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !product) return;
+    setRequestId(`site-${crypto.randomUUID()}`);
+    setOffer(null);
+    setError(null);
+    setDone(null);
+    setShowConfirm(false);
+    if (!token || !product.slug) return;
+    let cancelled = false;
+    fetch('/api/shop/catalog', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((payload) => {
+        const p = payload?.products?.find((x: { slug: string }) => x.slug === product.slug);
+        if (!cancelled && p) setOffer({ price: p.price, owned: p.owned, upgrade: p.upgrade });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, product, token]);
 
   if (!isOpen || !product) return null;
 
-  const canAfford = isLoggedIn && ecus >= product.price;
+  const price = offer?.price ?? product.price;
+  const canAfford = isLoggedIn && ecus >= price;
 
   const handleBuyClick = () => {
     if (!isLoggedIn) {
@@ -35,17 +62,29 @@ export default function ProductModal({ product, isOpen, onClose, onPurchaseSucce
     setShowConfirm(true);
   };
 
-  const handleConfirm = () => {
-    if (spendEcus(product.price)) {
-      addPurchase({
-        productId: product.id,
-        productName: product.name,
-        price: product.price,
-        date: new Date().toISOString(),
+  const handleConfirm = async () => {
+    if (!token || !product.slug || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/shop/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ slug: product.slug, requestId }),
       });
-      setShowConfirm(false);
-      onClose();
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError({ text: payload?.error || `Erreur ${res.status}`, needsLink: payload?.code === 'compte_non_lie' });
+        return;
+      }
+      setDone({ price: payload.price, balance: payload.balance });
+      await refreshUserData();
       onPurchaseSuccess?.();
+    } catch {
+      // Réponse perdue : le serveur sait si l'achat est passé (même identifiant), rien n'est payé deux fois
+      setError({ text: 'Le serveur n\'a pas répondu. Vérifie tes achats sur ton profil avant de réessayer.', needsLink: false });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -69,23 +108,40 @@ export default function ProductModal({ product, isOpen, onClose, onPurchaseSucce
               <EcuIcon className="mx-auto mb-5 h-16 w-16" />
               <h2 id="produit-titre" className="mb-2 text-3xl text-white">Confirmer l'achat</h2>
               <p className="text-brume-300">
-                Tu es sur le point d'acheter <strong>{product.name}</strong> pour <strong>{product.price} Écus</strong>.
+                Tu es sur le point d'acheter <strong>{product.name}</strong> pour <strong>{price} Écus</strong>
+                {offer?.upgrade ? ' (montée en gamme : tu ne paies que la différence)' : ''}.
               </p>
-              <p className="mt-2 text-sm text-brume-600">Les Écus seront débités de ton solde.</p>
+              <p className="mt-2 text-sm text-brume-600">Les Écus sont débités tout de suite ; la livraison se fait en jeu, dès que tu es connecté.</p>
+              {error && (
+                <p className="mt-4 rounded-xl bg-red-500/15 p-3 text-sm text-red-200" role="alert">
+                  {error.text}
+                  {error.needsLink && (
+                    <> <Link to="/profile" className="font-bold underline" onClick={onClose}>Lier mon compte</Link></>
+                  )}
+                </p>
+              )}
+              {done && (
+                <p className="mt-4 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-200" role="status">
+                  Payé {done.price} Écus (reste {done.balance}). Livraison en jeu dans quelques secondes si tu es connecté, sinon à ta prochaine connexion.
+                </p>
+              )}
             </div>
             <div className="flex gap-4">
               <button
                 onClick={handleCancelConfirm}
                 className="btn-3d btn-nuit flex-1"
               >
-                Annuler
+                {done ? 'Fermer' : 'Annuler'}
               </button>
-              <button
-                onClick={handleConfirm}
-                className="btn-3d btn-or flex-1"
-              >
-                Confirmer
-              </button>
+              {!done && (
+                <button
+                  onClick={handleConfirm}
+                  disabled={busy}
+                  className="btn-3d btn-or flex-1 disabled:opacity-60"
+                >
+                  {busy ? 'Paiement…' : 'Confirmer'}
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -112,12 +168,16 @@ export default function ProductModal({ product, isOpen, onClose, onPurchaseSucce
               <div className="flex items-center justify-between gap-4 border-t border-ciel/15 pt-5">
                 <span className="inline-flex items-center gap-2 font-display text-3xl text-or">
                   <EcuIcon className="h-7 w-7" />
-                  {product.price}
+                  {price}
                   <span className="sr-only">Écus</span>
                 </span>
-                <button type="button" onClick={handleBuyClick} className="btn-3d btn-or">
-                  {!isLoggedIn ? 'Se connecter' : canAfford ? 'Acheter' : 'Acheter des Écus'}
-                </button>
+                {offer?.owned ? (
+                  <span className="font-bold text-emerald-300">Déjà à toi</span>
+                ) : (
+                  <button type="button" onClick={handleBuyClick} className="btn-3d btn-or">
+                    {!isLoggedIn ? 'Se connecter' : canAfford ? 'Acheter' : 'Acheter des Écus'}
+                  </button>
+                )}
               </div>
             </div>
           </>
