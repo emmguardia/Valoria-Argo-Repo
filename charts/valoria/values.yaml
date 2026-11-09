@@ -20,7 +20,7 @@ imagePullSecrets:
   - name: ghcr-secret
 
 frontend:
-  image: ghcr.io/emmguardia/valoria-front@sha256:463bf981e86b7c2bccc43dfc43a086b63201fa87f62e0c6dac55693dd80ad8bd
+  image: ghcr.io/emmguardia/valoria-front@sha256:93b469294fc6059ad8e63841ae129ef758381d9e6bd8b5d49ce36b5adf2a3cba
   imagePullPolicy: IfNotPresent
   replicas: 2
   serviceType: ClusterIP
@@ -40,7 +40,7 @@ frontend:
     memoryTarget: 80
 
 backend:
-  image: ghcr.io/emmguardia/valoria-back@sha256:e4a72c0011b4204f96c99133dde31287a95c59e35b62a80d6c8584feac98bd7a
+  image: ghcr.io/emmguardia/valoria-back@sha256:032a1bc18f0609b4eaf993de345c68b1dad5fbd7e3b53034f5c328ee2c9380df
   imagePullPolicy: IfNotPresent
   # 2 réplicas sur 2 nœuds différents (topologySpreadConstraints + PodDisruptionBudget)
   replicas: 2
