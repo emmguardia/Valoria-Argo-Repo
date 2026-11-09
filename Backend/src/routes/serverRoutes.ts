@@ -21,7 +21,9 @@ function requireServerToken(req: Request, res: Response, next: NextFunction) {
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    console.warn(JSON.stringify({ evt: 'serveur', etape: 'jeton-refuse', ip: req.ip, ts: new Date().toISOString() }));
+    // Derrière Cloudflare, req.ip est le pod cloudflared : l'IP de l'appelant est dans CF-Connecting-IP
+    const ip = req.get('cf-connecting-ip') || req.ip;
+    console.warn(JSON.stringify({ evt: 'serveur', etape: 'jeton-refuse', ip, ua: req.get('user-agent') ?? null, ts: new Date().toISOString() }));
     return res.status(401).json({ error: 'Jeton invalide' });
   }
   return next();
