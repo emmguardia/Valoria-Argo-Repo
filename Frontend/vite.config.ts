@@ -12,7 +12,8 @@ export default defineConfig({
     copyPublicDir: true,
     rollupOptions: {
       output: {
-        assetFileNames: 'assets/[name].[ext]',
+        // Empreinte dans le nom : nginx les sert « immutable » un an, un nom fixe garderait l'ancienne version
+        assetFileNames: 'assets/[name]-[hash][extname]',
       },
     },
   },
