@@ -25,12 +25,30 @@ const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
 const AdminRewardJobsPage = lazy(() => import('./pages/admin/AdminRewardJobsPage'));
 const AdminServerPage = lazy(() => import('./pages/admin/AdminServerPage'));
+const AdminStatsPage = lazy(() => import('./pages/admin/AdminStatsPage'));
 const RequireAdmin = lazy(() => import('./components/admin/RequireAdmin'));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
+// Mesure d'audience anonyme : une page vue envoyée au site, sans cookie ni identifiant (Backend statsService).
+// Rien n'est envoyé si le navigateur demande à ne pas être suivi, ni pour les pages admin.
+function PageViews() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const nav = navigator as Navigator & { globalPrivacyControl?: boolean };
+    if (nav.doNotTrack === '1' || nav.globalPrivacyControl || pathname.startsWith('/admin')) return;
+    const body = JSON.stringify({ p: pathname, r: document.referrer });
+    try {
+      if (!navigator.sendBeacon('/api/stats/v', new Blob([body], { type: 'application/json' }))) throw new Error();
+    } catch {
+      fetch('/api/stats/v', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    }
   }, [pathname]);
   return null;
 }
@@ -51,6 +69,7 @@ function App() {
     <ErrorBoundary>
       <div className="min-h-screen bg-nuit-900">
         <ScrollToTop />
+        <PageViews />
         <Header />
         <div className="pt-24">
           <Suspense fallback={<PageLoader />}>
@@ -75,6 +94,7 @@ function App() {
                 <Route path="payments" element={<AdminPaymentsPage />} />
                 <Route path="reward-jobs" element={<AdminRewardJobsPage />} />
                 <Route path="serveur" element={<AdminServerPage />} />
+                <Route path="statistiques" element={<AdminStatsPage />} />
               </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

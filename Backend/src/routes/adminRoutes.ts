@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDbPool } from '../db/mysql.js';
 import { writeLedger } from '../services/shopService.js';
 import { logCommandEvent } from '../services/serverQueueService.js';
+import { readStats } from '../services/statsService.js';
 import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
 import { authReadLimiter, authWriteLimiter } from '../middleware/rateLimitMiddleware.js';
 
@@ -602,6 +603,17 @@ adminRouter.get('/purchases', authReadLimiter, async (_req, res) => {
     return res.json({ items: rows });
   } catch (error) {
     console.error('[admin/purchases] error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/** Statistiques anonymes du site, du serveur et de la boutique sur 7, 30 ou 90 jours. */
+adminRouter.get('/stats', authReadLimiter, async (req, res) => {
+  const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  try {
+    return res.json(await readStats(days));
+  } catch (error) {
+    console.error('[admin/stats] error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -30,7 +30,27 @@ export interface LedgerEntry {
   ref_type: string | null; ref_id: string | null; detail: string | null; created_at: string;
 }
 
+type Daily = { day: string; value: number }[];
+type Top = { label: string; views: number; visitors: number }[];
+export interface StatsData {
+  days: number;
+  site: { visitors: Daily; views: Daily; pages: Top; referrers: Top; devices: Top; browsers: Top; systems: Top; countries: Top };
+  server: {
+    now: { at: string; online: number; tps: number; mspt: number; memoryUsedMb: number; memoryMaxMb: number; cpuPercent: number | null; chunks: number; entities: number } | null;
+    hourly: { hour: string; online: number; tps: number; mspt: number; memoryMb: number; memoryMaxMb: number; cpu: number | null; chunks: number; entities: number }[];
+    uniquePlayers: Daily; newPlayers: Daily; playtimeHours: Daily; sessions: Daily;
+    counters: Record<string, Daily>;
+    snapshot: { at: string; data: Record<string, unknown> } | null;
+  };
+  business: {
+    accounts: Daily; totalAccounts: number; linkedAccounts: number; revenueEuros: Daily; ecusBought: Daily;
+    purchases: { label: string; count: number; ecus: number }[]; purchasesByDay: Daily; votes: Daily;
+    votesBySite: { label: string; count: number }[];
+  };
+}
+
 export const adminApi = {
+  stats: (token: string | null, days: number) => request<StatsData>(`/api/admin/stats?days=${days}`, token),
   // Serveur Minecraft : état de la liaison, file de commandes, historique, registre des Écus
   serverStatus: (token: string | null) => request<ServerStatus>('/api/admin/server-status', token),
   listServerCommands: (token: string | null, params: { status?: string; player?: string } = {}) => {

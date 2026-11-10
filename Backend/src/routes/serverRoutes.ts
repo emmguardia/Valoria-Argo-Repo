@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { applyAcks, claimCommands, isMcName, isMcUuid, recordHeartbeat } from '../services/serverQueueService.js';
+import { recordServerStats } from '../services/statsService.js';
 import { ShopError, balancesFor, catalogFor, linkAccount, purchaseProduct, userIdForUuid } from '../services/shopService.js';
 
 // API réservée au serveur Minecraft (plugin ValoriaCore), protégée par le jeton partagé VALORIA_SERVER_TOKEN.
@@ -41,6 +42,20 @@ const pollSchema = z.object({
     executedAt: z.string().max(40).optional(),
   })).max(500).default([]),
   pluginVersion: z.string().max(40).optional(),
+  // Statistiques (anonymes) du serveur, au plus une fois par minute ; les joueurs sont des empreintes du jour
+  stats: z.object({
+    metrics: z.object({
+      online: z.number().int().min(0).max(10000), tps: z.number().min(0).max(100), mspt: z.number().min(0).max(100000),
+      memoryUsedMb: z.number().int().min(0), memoryMaxMb: z.number().int().min(0), cpuPercent: z.number().min(0).max(10000).nullable(),
+      chunks: z.number().int().min(0), entities: z.number().int().min(0),
+    }).optional(),
+    players: z.array(z.object({
+      player: z.string().regex(/^[0-9a-f]{64}$/), firstJoin: z.boolean(),
+      sessions: z.number().int().min(0).max(1000), playtimeSeconds: z.number().int().min(0).max(86400 * 2),
+    })).max(1000).optional(),
+    counters: z.record(z.string().regex(/^[a-z_]{1,40}$/), z.number().int().min(0)).optional(),
+    snapshot: z.record(z.string(), z.unknown()).optional(),
+  }).optional(),
 });
 
 // Un passage noté par minute et par réplica, ou dès qu'il s'est passé quelque chose
@@ -50,7 +65,11 @@ let lastHeartbeat = 0;
 serverRouter.post('/poll', async (req, res) => {
   const parsed = pollSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Requête invalide' });
-  const { online, acks, pluginVersion } = parsed.data;
+  const { online, acks, pluginVersion, stats } = parsed.data;
+  if (stats) {
+    // Les statistiques ne bloquent jamais les livraisons
+    recordServerStats(stats).catch((error) => console.error('[server/poll] stats error:', error));
+  }
   try {
     const acked = await applyAcks(acks);
     const commands = await claimCommands(online);

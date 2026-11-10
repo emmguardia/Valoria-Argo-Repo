@@ -8,6 +8,7 @@ import { adminRouter } from './routes/adminRoutes.js';
 import { voteRouter } from './routes/voteRoutes.js';
 import { serverRouter } from './routes/serverRoutes.js';
 import { shopRouter } from './routes/shopRoutes.js';
+import { statsRouter } from './routes/statsRoutes.js';
 
 const app = express();
 app.set('trust proxy', env.TRUST_PROXY);
@@ -23,6 +24,8 @@ app.use('/api/products', productsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/votes', voteRouter);
 app.use('/api/shop', shopRouter);
+// Mesure d'audience anonyme (sans cookie, sans IP stockée)
+app.use('/api/stats', statsRouter);
 // Réservé au serveur Minecraft (jeton partagé) : il vient chercher ses commandes, le site ne l'appelle jamais
 app.use('/api/server', serverRouter);
 

@@ -62,9 +62,12 @@ export default function MentionsLegalesPage() {
               </div>
             </div>
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">V. COOKIES</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">V. COOKIES ET STATISTIQUES</h2>
               <p className="text-gray-700">
                 Ce site n'utilise pas de cookies de traçage, d'analyse ou de marketing. Seuls des cookies strictement techniques, nécessaires au bon fonctionnement du site, peuvent être utilisés.
+              </p>
+              <p className="text-gray-700 mt-4">
+                Nous mesurons la fréquentation de façon anonyme, sans cookie et sans outil tiers : pour chaque page vue, nous comptons la page, le site d'où vous venez, le type d'appareil, le navigateur, le système et le pays. Votre adresse IP n'est jamais enregistrée : elle sert seulement, le jour même, à ne pas compter deux fois le même visiteur, au moyen d'une empreinte dont la clé est effacée chaque jour. Il est donc impossible de relier ces chiffres à une personne. Si votre navigateur demande à ne pas être suivi (Do Not Track ou Global Privacy Control), rien n'est compté.
               </p>
             </div>
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">

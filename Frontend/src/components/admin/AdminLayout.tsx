@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Package, Users, CreditCard, Gift, LayoutDashboard, Shield, Server } from 'lucide-react';
+import { Package, Users, CreditCard, Gift, LayoutDashboard, Shield, Server, BarChart3 } from 'lucide-react';
 import SEO from '../SEO';
 
 const links = [
   { to: '/admin', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
+  { to: '/admin/statistiques', label: 'Statistiques', icon: BarChart3 },
   { to: '/admin/products', label: 'Produits', icon: Package },
   { to: '/admin/users', label: 'Utilisateurs', icon: Users },
   { to: '/admin/payments', label: 'Paiements', icon: CreditCard },
