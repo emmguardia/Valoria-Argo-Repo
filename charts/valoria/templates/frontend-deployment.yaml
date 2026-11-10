@@ -20,6 +20,9 @@ spec:
     metadata:
       labels:
         app: valoria-front
+      annotations:
+        # Redémarre les pods quand la config nginx change (nginx ne relit pas la ConfigMap tout seul)
+        checksum/nginx: {{ include (print $.Template.BasePath "/frontend-nginx-configmap.yaml") . | sha256sum }}
     spec:
       # Réplicas toujours sur des nœuds différents (un nœud k3s par hôte Proxmox) : la perte d'un hôte ne coupe pas le site.
       topologySpreadConstraints:

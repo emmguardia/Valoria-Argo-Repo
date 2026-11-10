@@ -36,7 +36,23 @@ data:
         }
         {{- end }}
 
+        # Fichiers versionnés (empreinte dans le nom) : gardés un an ; un fichier absent (ancienne version) est une
+        # vraie 404, pas la page HTML que le navigateur prendrait pour du JS (écran vide après un déploiement)
+        location ~* \.(?:css|js|mjs|svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            try_files $uri =404;
+            error_page 404 /__absent;
+        }
+
+        location = /__absent {
+            internal;
+            return 404;
+        }
+
+        # La page elle-même est toujours revalidée : après un déploiement, le navigateur charge les nouveaux fichiers
         location / {
+            expires epoch;
             try_files $uri $uri/ /index.html;
         }
 
