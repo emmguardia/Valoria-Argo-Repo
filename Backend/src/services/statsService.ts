@@ -3,7 +3,8 @@ import { getDbPool } from '../db/mysql.js';
 
 // Statistiques anonymes (page admin « Statistiques ») : voir migrations/005_statistiques.sql.
 // Site : aucun cookie ni identifiant ; le visiteur du jour est une empreinte faite avec un sel tiré chaque jour et
-// effacé le lendemain, avec les empreintes. Serveur : les joueurs arrivent déjà en empreintes (clé connue de la VM seule).
+// effacé le lendemain, avec les empreintes. Serveur : les joueurs arrivent déjà en empreintes stables (clé connue de la
+// VM seule), ce qui suffit à mesurer la rétention des nouveaux joueurs sans savoir qui ils sont.
 
 const TZ = 'Europe/Paris';
 const DIMENSIONS = ['page', 'provenance', 'appareil', 'navigateur', 'systeme', 'pays'] as const;
@@ -116,7 +117,7 @@ export type PlayerActivity = { player: string; firstJoin: boolean; sessions: num
 
 /** Mesures envoyées par le serveur avec son tirage (au plus une ligne par minute). */
 export async function recordServerStats(input: {
-  metrics?: ServerMetrics; players?: PlayerActivity[]; counters?: Record<string, number>; snapshot?: unknown;
+  metrics?: ServerMetrics; players?: PlayerActivity[]; snapshot?: unknown;
 }) {
   const db = await getDbPool();
   const now = new Date();
@@ -140,13 +141,6 @@ export async function recordServerStats(input: {
        ON DUPLICATE KEY UPDATE first_join = GREATEST(first_join, VALUES(first_join)),
          sessions = sessions + VALUES(sessions), playtime_seconds = playtime_seconds + VALUES(playtime_seconds)`,
       [day, p.player, p.firstJoin ? 1 : 0, p.sessions, p.playtimeSeconds]
-    );
-  }
-  for (const [counter, value] of Object.entries(input.counters ?? {})) {
-    if (!/^[a-z_]{1,40}$/.test(counter) || !Number.isFinite(value) || value <= 0) continue;
-    await db.execute(
-      `INSERT INTO stats_server_daily (day, counter, value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE value = value + VALUES(value)`,
-      [day, counter, Math.floor(value)]
     );
   }
   if (input.snapshot) {
@@ -188,8 +182,28 @@ export async function readStats(days: number) {
   const players = await q(
     `SELECT day, COUNT(*) AS unique_players, SUM(first_join) AS new_players, SUM(sessions) AS sessions,
             SUM(playtime_seconds) AS playtime FROM stats_server_players WHERE day >= ? GROUP BY day`, [since]);
-  const counters = await q(`SELECT day, counter, value FROM stats_server_daily WHERE day >= ?`, [since]);
-  const counterNames = [...new Set(counters.map((c) => String(c.counter)))].sort();
+  // Rétention : pour chaque jour d'arrivée, nouveaux joueurs revenus le lendemain, dans les 7 et dans les 30 jours.
+  // Une fenêtre pas encore écoulée (arrivés hier pour J+7…) est rendue null : pas de faux zéro.
+  const cohorts = await q(
+    `SELECT n.day, COUNT(*) AS arrivals, AVG(n.playtime_seconds) AS first_day_seconds,
+       SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day = n.day + INTERVAL 1 DAY)) AS d1,
+       SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day > n.day AND r.day <= n.day + INTERVAL 7 DAY)) AS d7,
+       SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day > n.day AND r.day <= n.day + INTERVAL 30 DAY)) AS d30
+     FROM stats_server_players n WHERE n.first_join = 1 AND n.day >= ? GROUP BY n.day ORDER BY n.day`, [since]);
+  const today = parisDay();
+  const elapsed = (day: string, n: number) => parisDay(new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000)) < today;
+  const retention = cohorts.map((c) => {
+    const day = iso(c.day);
+    return {
+      day, arrivals: Number(c.arrivals), firstDayMinutes: Math.round(Number(c.first_day_seconds ?? 0) / 60),
+      d1: elapsed(day, 1) ? Number(c.d1) : null, d7: elapsed(day, 7) ? Number(c.d7) : null, d30: elapsed(day, 30) ? Number(c.d30) : null,
+    };
+  });
+  const rate = (key: 'd1' | 'd7' | 'd30') => {
+    const done = retention.filter((r) => r[key] !== null);
+    const arrivals = done.reduce((a, r) => a + r.arrivals, 0);
+    return arrivals ? Math.round((done.reduce((a, r) => a + (r[key] ?? 0), 0) / arrivals) * 1000) / 10 : null;
+  };
   const snapshot = (await q('SELECT at, data FROM stats_server_snapshots ORDER BY at DESC LIMIT 1'))[0] ?? null;
   const last = (await q('SELECT * FROM stats_server_minutes ORDER BY at DESC LIMIT 1'))[0] ?? null;
 
@@ -225,7 +239,9 @@ export async function readStats(days: number) {
       newPlayers: series(players, 'day', 'new_players'),
       playtimeHours: series(players, 'day', 'playtime').map((p) => ({ day: p.day, value: Math.round((p.value / 3600) * 10) / 10 })),
       sessions: series(players, 'day', 'sessions'),
-      counters: Object.fromEntries(counterNames.map((name) => [name, series(counters.filter((c) => c.counter === name), 'day', 'value')])),
+      returningPlayers: series(players.map((p) => ({ day: p.day, n: Number(p.unique_players) - Number(p.new_players ?? 0) })), 'day', 'n'),
+      retention,
+      retentionRates: { d1: rate('d1'), d7: rate('d7'), d30: rate('d30') },
       snapshot: snapshot ? { at: snapshot.at, data: typeof snapshot.data === 'string' ? JSON.parse(snapshot.data) : snapshot.data } : null,
     },
     business: {

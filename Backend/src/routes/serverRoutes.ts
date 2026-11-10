@@ -53,7 +53,6 @@ const pollSchema = z.object({
       player: z.string().regex(/^[0-9a-f]{64}$/), firstJoin: z.boolean(),
       sessions: z.number().int().min(0).max(1000), playtimeSeconds: z.number().int().min(0).max(86400 * 2),
     })).max(1000).optional(),
-    counters: z.record(z.string().regex(/^[a-z_]{1,40}$/), z.number().int().min(0)).optional(),
     snapshot: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
 });

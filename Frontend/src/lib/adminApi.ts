@@ -38,8 +38,10 @@ export interface StatsData {
   server: {
     now: { at: string; online: number; tps: number; mspt: number; memoryUsedMb: number; memoryMaxMb: number; cpuPercent: number | null; chunks: number; entities: number } | null;
     hourly: { hour: string; online: number; tps: number; mspt: number; memoryMb: number; memoryMaxMb: number; cpu: number | null; chunks: number; entities: number }[];
-    uniquePlayers: Daily; newPlayers: Daily; playtimeHours: Daily; sessions: Daily;
-    counters: Record<string, Daily>;
+    uniquePlayers: Daily; newPlayers: Daily; playtimeHours: Daily; sessions: Daily; returningPlayers: Daily;
+    /** Par jour d'arrivée : nouveaux joueurs et combien sont revenus (null tant que la fenêtre n'est pas écoulée). */
+    retention: { day: string; arrivals: number; firstDayMinutes: number; d1: number | null; d7: number | null; d30: number | null }[];
+    retentionRates: { d1: number | null; d7: number | null; d30: number | null };
     snapshot: { at: string; data: Record<string, unknown> } | null;
   };
   business: {

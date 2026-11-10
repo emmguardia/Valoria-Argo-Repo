@@ -5,18 +5,15 @@ import { AdminPageHeader, ErrorBanner, inputCls } from '../../components/admin/u
 import { BarList, LineChart, StatTile, type Point } from '../../components/admin/charts';
 import { fmt } from '../../components/admin/format';
 
-// Statistiques anonymes : fréquentation du site (sans cookie ni IP), santé et activité du serveur Minecraft,
-// boutique et communauté. Aucune donnée ne permet de retrouver une personne (voir Backend statsService).
+// Statistiques anonymes : fréquentation du site (sans cookie ni IP), rétention des joueurs et santé du serveur
+// Minecraft, boutique et communauté. Aucune donnée ne permet de retrouver une personne (voir Backend statsService).
 
 const PERIODS = [7, 30, 90] as const;
-const COUNTERS: Record<string, string> = {
-  connexions: 'Connexions', nouveaux_joueurs: 'Nouveaux joueurs', morts: 'Morts', kills_pvp: 'Kills PvP',
-  monstres_tues: 'Monstres tués', blocs_casses: 'Blocs cassés', blocs_poses: 'Blocs posés', messages: 'Messages du chat',
-};
 
 const dayLabel = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 const daily = (rows: { day: string; value: number }[]): Point[] => rows.map((r) => ({ label: dayLabel(r.day), value: r.value }));
 const sum = (rows: { value: number }[]) => rows.reduce((a, r) => a + r.value, 0);
+const pct = (n: number | null, of: number) => (n === null ? '—' : of ? `${fmt((n / of) * 100)} %` : '—');
 
 function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
@@ -35,7 +32,6 @@ export default function AdminStatsPage() {
   const [days, setDays] = useState<number>(30);
   const [data, setData] = useState<StatsData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [counter, setCounter] = useState('connexions');
 
   useEffect(() => {
     let cancelled = false;
@@ -65,8 +61,12 @@ export default function AdminStatsPage() {
   const views = sum(site.views);
   const now = server.now;
   const snap = server.snapshot?.data as { factions?: number; factionsParNation?: Record<string, number>; joueursInscrits?: number; siegesEnCours?: number; voteParty?: number } | undefined;
-  const counterNames = Object.keys(server.counters);
-  const shownCounter = counterNames.includes(counter) ? counter : counterNames[0];
+  const cohorts = server.retention;
+  const rateHint = (key: 'd1' | 'd7' | 'd30') => {
+    const done = cohorts.filter((c) => c[key] !== null);
+    return done.length ? `${fmt(done.reduce((a, c) => a + (c[key] ?? 0), 0))} sur ${fmt(done.reduce((a, c) => a + c.arrivals, 0))} nouveaux joueurs` : 'pas encore assez de recul';
+  };
+  const rateTile = (v: number | null) => (v === null ? '—' : `${fmt(v, 1)} %`);
   const playtime = sum(server.playtimeHours);
   const sessions = sum(server.sessions);
 
@@ -104,7 +104,64 @@ export default function AdminStatsPage() {
         </div>
       </Section>
 
-      <Section title="Serveur Minecraft" subtitle="Mesures envoyées par le serveur chaque minute ; joueurs comptés par empreinte du jour, sans pseudo.">
+      <Section title="Joueurs : est-ce qu'ils reviennent ?" subtitle="Un nouveau joueur est suivi par une empreinte stable faite sur le serveur ; sa clé ne quitte jamais la VM, le site ne sait pas qui c'est.">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatTile label="Nouveaux joueurs" value={fmt(sum(server.newPlayers))} hint={`sur les ${data.days} derniers jours`} />
+          <StatTile label="Revenus le lendemain" value={rateTile(server.retentionRates.d1)} hint={rateHint('d1')} />
+          <StatTile label="Revenus dans la semaine" value={rateTile(server.retentionRates.d7)} hint={rateHint('d7')} />
+          <StatTile label="Revenus dans le mois" value={rateTile(server.retentionRates.d30)} hint={rateHint('d30')} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <LineChart title="Revenus le lendemain, par jour d'arrivée" unit=" %" max={100}
+                     points={cohorts.filter((c) => c.d1 !== null && c.arrivals).map((c) => ({ label: dayLabel(c.day), value: Math.round(((c.d1 ?? 0) / c.arrivals) * 100) }))} />
+          <LineChart title="Nouveaux joueurs par jour" points={daily(server.newPlayers)} />
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
+          <table className="w-full text-sm text-stone-900">
+            <caption className="px-4 pt-3 text-left text-sm font-semibold text-stone-900">Détail par jour d'arrivée</caption>
+            <thead>
+              <tr className="text-xs text-stone-500">
+                <th className="px-4 py-2 text-left font-medium">Arrivés le</th>
+                <th className="px-4 py-2 text-right font-medium">Nouveaux</th>
+                <th className="px-4 py-2 text-right font-medium">Revenus le lendemain</th>
+                <th className="px-4 py-2 text-right font-medium">Dans la semaine</th>
+                <th className="px-4 py-2 text-right font-medium">Dans le mois</th>
+                <th className="px-4 py-2 text-right font-medium">Jeu le 1er jour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cohorts.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-stone-500">Pas encore de nouveaux joueurs.</td></tr>
+              )}
+              {[...cohorts].reverse().map((c) => (
+                <tr key={c.day} className="border-t border-stone-100">
+                  <td className="px-4 py-2 text-stone-700">{dayLabel(c.day)}</td>
+                  <td className="px-4 py-2 text-right font-medium text-stone-900">{fmt(c.arrivals)}</td>
+                  <td className="px-4 py-2 text-right">{pct(c.d1, c.arrivals)}{c.d1 !== null && <span className="text-stone-500"> ({fmt(c.d1)})</span>}</td>
+                  <td className="px-4 py-2 text-right">{pct(c.d7, c.arrivals)}</td>
+                  <td className="px-4 py-2 text-right">{pct(c.d30, c.arrivals)}</td>
+                  <td className="px-4 py-2 text-right">{fmt(c.firstDayMinutes)} min</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="px-4 pb-3 text-xs text-stone-500">« — » : la fenêtre n'est pas encore écoulée (un joueur arrivé hier ne peut pas encore être revenu dans la semaine).</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatTile label="Joueurs uniques (somme des jours)" value={fmt(sum(server.uniquePlayers))} />
+          <StatTile label="Anciens joueurs revenus (somme des jours)" value={fmt(sum(server.returningPlayers))} />
+          <StatTile label="Heures jouées" value={fmt(playtime, 1)} />
+          <StatTile label="Durée moyenne d'une session" value={sessions ? `${fmt((playtime * 60) / sessions)} min` : '—'} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <LineChart title="Joueurs en ligne (maximum par heure)" points={hourly.map((h) => ({ label: h.label, value: h.online }))} />
+          <LineChart title="Joueurs uniques par jour" points={daily(server.uniquePlayers)} />
+          <LineChart title="Anciens joueurs revenus par jour" points={daily(server.returningPlayers)} />
+          <LineChart title="Heures jouées par jour" points={daily(server.playtimeHours)} digits={1} unit=" h" />
+        </div>
+      </Section>
+
+      <Section title="Santé du serveur" subtitle="Mesures envoyées par le serveur chaque minute.">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <StatTile label="En ligne maintenant" value={now ? fmt(now.online) : '—'} hint={now ? `mesuré le ${new Date(now.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : 'serveur éteint ou pas encore de mesure'} />
           <StatTile label="TPS" value={now ? fmt(now.tps, 1) : '—'} tone={now ? (now.tps >= 19 ? 'good' : 'bad') : undefined} hint="20 = parfait" />
@@ -112,32 +169,11 @@ export default function AdminStatsPage() {
           <StatTile label="Mémoire" value={now ? `${fmt(now.memoryUsedMb / 1024, 1)} / ${fmt(now.memoryMaxMb / 1024, 1)} Go` : '—'} />
           <StatTile label="Processeur" value={now?.cpuPercent != null ? `${fmt(now.cpuPercent, 0)} %` : '—'} hint={now ? `${fmt(now.chunks)} chunks, ${fmt(now.entities)} entités` : undefined} />
         </div>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile label="Joueurs uniques (somme des jours)" value={fmt(sum(server.uniquePlayers))} />
-          <StatTile label="Nouveaux joueurs" value={fmt(sum(server.newPlayers))} />
-          <StatTile label="Heures jouées" value={fmt(playtime, 1)} />
-          <StatTile label="Durée moyenne d'une session" value={sessions ? `${fmt((playtime * 60) / sessions)} min` : '—'} />
-        </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <LineChart title="Joueurs en ligne (maximum par heure)" points={hourly.map((h) => ({ label: h.label, value: h.online }))} />
-          <LineChart title="Joueurs uniques par jour" points={daily(server.uniquePlayers)} />
-          <LineChart title="Nouveaux joueurs par jour" points={daily(server.newPlayers)} />
-          <LineChart title="Heures jouées par jour" points={daily(server.playtimeHours)} digits={1} unit=" h" />
           <LineChart title="TPS (le plus bas de chaque heure)" points={hourly.map((h) => ({ label: h.label, value: h.tps }))} digits={1} max={20} />
           <LineChart title="MSPT (le plus haut de chaque heure)" points={hourly.map((h) => ({ label: h.label, value: h.mspt }))} digits={1} unit=" ms" />
           <LineChart title="Mémoire utilisée (Go)" points={hourly.map((h) => ({ label: h.label, value: Math.round(h.memoryMb / 102.4) / 10 }))} digits={1} unit=" Go" />
           <LineChart title="Processeur (moyenne par heure)" points={hourly.filter((h) => h.cpu !== null).map((h) => ({ label: h.label, value: h.cpu ?? 0 }))} unit=" %" />
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-2">
-            {counterNames.length > 0 && (
-              <select value={shownCounter} onChange={(e) => setCounter(e.target.value)} className={`${inputCls} w-auto`} aria-label="Activité affichée">
-                {counterNames.map((c) => <option key={c} value={c}>{COUNTERS[c] ?? c}</option>)}
-              </select>
-            )}
-            <LineChart title={`${COUNTERS[shownCounter] ?? shownCounter ?? 'Activité'} par jour`} points={daily(server.counters[shownCounter] ?? [])} />
-          </div>
-          <BarList title="Activité sur la période" items={counterNames.map((c) => ({ label: COUNTERS[c] ?? c, value: sum(server.counters[c]) }))} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid grid-cols-2 gap-4">

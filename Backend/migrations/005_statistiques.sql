@@ -3,7 +3,8 @@
 -- Site : aucun cookie, aucune IP ni identifiant stocké. Un visiteur du jour est une empreinte
 -- SHA-256(sel du jour + IP + navigateur) ; le sel est tiré au hasard chaque jour et effacé le lendemain avec les
 -- empreintes : on ne peut plus jamais relier une visite à quelqu'un. Seuls restent des compteurs par jour.
--- Serveur : les joueurs sont des empreintes calculées sur la VM avec une clé que le site ne connaît pas.
+-- Serveur : les joueurs sont des empreintes stables calculées sur la VM avec une clé que le site ne connaît pas
+-- (assez pour la rétention : un nouveau joueur revient-il le lendemain ? jamais pour savoir qui il est).
 
 -- Sel du jour (une ligne par jour, celle de la veille est effacée)
 CREATE TABLE IF NOT EXISTS stats_salts (
@@ -41,23 +42,17 @@ CREATE TABLE IF NOT EXISTS stats_server_minutes (
   entities INT UNSIGNED NOT NULL
 );
 
--- Joueurs vus par jour (empreinte) : joueurs uniques, nouveaux joueurs, temps de jeu
+-- Joueurs vus par jour (empreinte) : joueurs uniques, nouveaux joueurs, temps de jeu, rétention
 CREATE TABLE IF NOT EXISTS stats_server_players (
   day DATE NOT NULL,
   player CHAR(64) NOT NULL,
   first_join TINYINT(1) NOT NULL DEFAULT 0,
   sessions SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   playtime_seconds INT UNSIGNED NOT NULL DEFAULT 0,
-  PRIMARY KEY (day, player)
+  PRIMARY KEY (day, player),
+  INDEX idx_stats_player (player, day)
 );
 
--- Compteurs de jeu par jour : morts, kills PvP, monstres tués, blocs cassés et posés, messages, votes…
-CREATE TABLE IF NOT EXISTS stats_server_daily (
-  day DATE NOT NULL,
-  counter VARCHAR(40) NOT NULL,
-  value BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  PRIMARY KEY (day, counter)
-);
 
 -- Photo de l'état du jeu (factions, nations, sièges…), au plus une par heure
 CREATE TABLE IF NOT EXISTS stats_server_snapshots (
