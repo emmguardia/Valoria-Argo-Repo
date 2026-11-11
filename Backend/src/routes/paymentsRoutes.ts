@@ -12,7 +12,10 @@ import { paymentsLimiter, webhookLimiter } from '../middleware/rateLimitMiddlewa
 export const paymentsRouter = Router();
 
 const ecusPackSchema = z.object({
-  ecus: z.union([z.literal(50), z.literal(150), z.literal(350), z.literal(750), z.literal(1650)])
+  ecus: z.union([z.literal(50), z.literal(150), z.literal(350), z.literal(750), z.literal(1650)]),
+  // Écus livrés tout de suite : l'acheteur accepte les CGV et renonce expressément à son droit de rétractation
+  // (art. L221-28 13° du Code de la consommation), case cochée sur la page /ecus
+  renonceRetractation: z.literal(true)
 });
 const confirmCheckoutSchema = z.object({
   sessionId: z.string().min(1)
@@ -61,7 +64,10 @@ paymentsRouter.get('/status', paymentsLimiter, (_req, res) => {
 paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateToken, async (req, res) => {
   const parsed = ecusPackSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Pack Écus invalide' });
+    const consent = parsed.error.issues.some((i) => i.path[0] === 'renonceRetractation');
+    return res.status(400).json({
+      error: consent ? 'Accepte les CGV et la livraison immédiate (case à cocher) pour acheter.' : 'Pack Écus invalide'
+    });
   }
 
   const stripe = getStripeClient();
@@ -107,7 +113,9 @@ paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateTok
         userId: user.userId,
         mcUsername: user.pseudo,
         ecus: String(ecus),
-        rewardId
+        rewardId,
+        cgvAcceptees: new Date().toISOString(),
+        renonceRetractation: 'oui'
       }
     });
 

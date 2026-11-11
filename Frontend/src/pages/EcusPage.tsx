@@ -11,6 +11,7 @@ export default function EcusPage() {
   const hasHandledCheckout = useRef(false);
   const { isLoggedIn, createEcusCheckout, confirmEcusCheckout } = useUser();
   const [selectedPack, setSelectedPack] = useState<number | null>(null);
+  const [accepte, setAccepte] = useState(false);
   // Le retour « annulé » de Stripe est lu dès l'init plutôt que dans l'effet
   // (react-hooks/set-state-in-effect) ; l'effet ne fait que nettoyer l'URL.
   const [status, setStatus] = useState<{
@@ -39,7 +40,7 @@ export default function EcusPage() {
         title: 'Redirection vers le paiement sécurisé',
         message: 'Tu vas être redirigé vers Stripe pour finaliser ton achat.',
       });
-      const checkoutUrl = await createEcusCheckout(ecus);
+      const checkoutUrl = await createEcusCheckout(ecus, accepte);
       window.location.assign(checkoutUrl);
     } catch (err) {
       setStatus({
@@ -151,18 +152,32 @@ export default function EcusPage() {
               </p>
             </div>
           )}
+          {isLoggedIn && (
+            <label className="mb-8 flex items-start gap-3 p-4 bg-white rounded-xl border border-gray-200 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={accepte}
+                onChange={(e) => setAccepte(e.target.checked)}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-[#1e3a5f]"
+              />
+              <span>
+                J'accepte les <Link to="/cgv" className="text-[#1e3a5f] font-semibold underline">conditions générales de vente</Link> et
+                je demande que mes Écus soient crédités tout de suite : je renonce ainsi à mon droit de rétractation de 14 jours.
+              </span>
+            </label>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {ECUS_PACKS.map((pack) => (
               <button
                 key={pack.ecus}
                 type="button"
-                disabled={selectedPack !== null}
+                disabled={selectedPack !== null || (isLoggedIn && !accepte)}
                 onClick={() => handleBuyPack(pack.ecus)}
                 className={`relative p-8 rounded-2xl border-2 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
                   pack.popular
                     ? 'border-[#f59e0b] bg-amber-50/80 shadow-lg shadow-amber-500/10'
                     : 'border-gray-200 bg-white hover:border-[#1e3a5f]/40 hover:shadow-slate-900/5'
-                } ${selectedPack !== null ? 'opacity-70 cursor-not-allowed' : ''}`}
+                } ${selectedPack !== null || (isLoggedIn && !accepte) ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 {pack.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#f59e0b] text-white text-xs font-bold rounded-full">

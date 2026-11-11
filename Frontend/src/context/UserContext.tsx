@@ -27,7 +27,8 @@ interface UserContextType {
   addPurchase: (record: PurchaseRecord) => void;
   updateProfile: (data: Partial<UserProfile>) => void;
   deleteAccount: () => void;
-  createEcusCheckout: (ecus: number) => Promise<string>;
+  /** renonceRetractation : case des CGV cochée (livraison immédiate, plus de droit de rétractation) */
+  createEcusCheckout: (ecus: number, renonceRetractation: boolean) => Promise<string>;
   confirmEcusCheckout: (sessionId: string) => Promise<{ credited: number; ecus: number; duplicated?: boolean }>;
   refreshUserData: () => Promise<void>;
 }
@@ -283,7 +284,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [logout, token]);
 
   const createEcusCheckout = useCallback(
-    async (ecusAmount: number) => {
+    async (ecusAmount: number, renonceRetractation: boolean) => {
       if (!token) throw new Error('Connecte-toi pour acheter des Écus');
 
       const response = await fetch('/api/payments/create-checkout-session', {
@@ -292,7 +293,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ecus: ecusAmount }),
+        body: JSON.stringify({ ecus: ecusAmount, renonceRetractation }),
       });
 
       const payload = await response.json().catch(() => ({}));
