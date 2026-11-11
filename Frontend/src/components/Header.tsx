@@ -9,6 +9,7 @@ const navLinks = [
   { to: '/classement', label: 'Classement' },
   { to: '/votes', label: 'Vote' },
   { to: '/regles', label: 'Règles' },
+  { to: '/rejoindre', label: 'Rejoindre' },
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
