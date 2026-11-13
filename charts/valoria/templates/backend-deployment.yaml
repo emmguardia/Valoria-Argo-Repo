@@ -102,6 +102,14 @@ spec:
               name: valoria-secrets
               key: stripe-publishable-key
               optional: true
+        # Secret de signature du webhook Stripe (whsec_…) : sans lui, les avis de paiement de Stripe sont ignorés et
+        # les Écus ne sont crédités que si l'acheteur revient sur /ecus après le paiement
+        - name: STRIPE_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: stripe-webhook-secret
+              optional: true
         # Jeton partagé avec le plugin du serveur Minecraft (API /api/server) ; optionnel tant qu'il n'est pas scellé
         - name: VALORIA_SERVER_TOKEN
           valueFrom:
