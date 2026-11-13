@@ -85,8 +85,8 @@ const NATIONS = [
 
 const ETAPES = [
   { title: `Lance Minecraft Java ${MC_VERSION}`, text: `Depuis le launcher officiel, choisis la version ${MC_VERSION}.` },
-  { title: 'Multijoueur, puis Connexion directe', text: 'Clique sur Multijoueur, puis sur Connexion directe.' },
-  { title: "Colle l'adresse et entre", text: `Adresse : ${SERVER_IP}, puis rejoins le royaume.` },
+  { title: 'Multijoueur, puis Ajouter', text: 'Clique sur Multijoueur, puis sur Ajouter un serveur.' },
+  { title: "Colle l'adresse et entre", text: `Adresse : ${SERVER_IP}. Enregistre, puis rejoins le royaume.` },
 ];
 
 const FAQ = [

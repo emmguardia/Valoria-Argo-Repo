@@ -4,12 +4,11 @@ import SEO from '../components/SEO';
 import CopyIpButton from '../components/CopyIpButton';
 import { DISCORD_URL, MC_VERSION, SERVER_IP } from '../data/site';
 
-// Comment rejoindre le serveur. Tant que l'adresse passe par playit (gratuit), la liste des serveurs de Minecraft
-// affiche « Impossible de se connecter » alors que la connexion directe marche : on l'explique ici.
+// Comment rejoindre le serveur (adresse protégée par TCPShield : la liste des serveurs comme la connexion directe marchent).
 const ETAPES = [
   { title: `Lance Minecraft Java ${MC_VERSION}`, text: `Depuis le launcher officiel, choisis la version ${MC_VERSION} (Java Edition, pas Bedrock).` },
-  { title: 'Multijoueur, puis Connexion directe', text: 'Sur l\'écran Multijoueur, clique sur « Connexion directe ».' },
-  { title: "Colle l'adresse et rejoins", text: `Adresse : ${SERVER_IP}, puis « Rejoindre le serveur ».` },
+  { title: 'Multijoueur, puis Ajouter un serveur', text: 'Sur l\'écran Multijoueur, clique sur « Ajouter un serveur ».' },
+  { title: "Colle l'adresse et rejoins", text: `Adresse : ${SERVER_IP}, enregistre, puis rejoins le royaume.` },
   { title: 'Accepte le pack de ressources', text: 'Il apporte les textures, les menus et les objets de Valoria. Il se télécharge une seule fois.' },
 ];
 
@@ -18,7 +17,7 @@ export default function RejoindrePage() {
     <div className="valoria-page-shell">
       <SEO
         title="Rejoindre"
-        description={`Rejoindre Valoria : Minecraft Java ${MC_VERSION}, adresse ${SERVER_IP}, en connexion directe.`}
+        description={`Rejoindre Valoria : Minecraft Java ${MC_VERSION}, adresse ${SERVER_IP}.`}
         keywords="rejoindre, adresse, IP, Valoria, Minecraft, serveur, faction"
         url="/rejoindre"
       />
@@ -56,10 +55,6 @@ export default function RejoindrePage() {
               <h2 className="text-2xl font-bold text-gray-900">Bon à savoir</h2>
             </div>
             <ul className="space-y-3 valoria-text-muted list-disc list-inside">
-              <li>
-                Si tu ajoutes le serveur à ta liste, Minecraft peut afficher « Impossible de se connecter » : passe par
-                « Connexion directe », ça fonctionne.
-              </li>
               <li>Pendant la bêta fermée, seuls les joueurs invités peuvent entrer. L'ouverture sera annoncée sur le Discord.</li>
               <li>Les mods de performance (Sodium, OptiFine…) sont acceptés, pas les mods de triche : voir les <Link to="/regles" className="font-bold text-[#1e3a5f] underline">règles</Link>.</li>
             </ul>
