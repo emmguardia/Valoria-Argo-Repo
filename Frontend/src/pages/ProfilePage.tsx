@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, Mail, Coins, Trash2, AlertTriangle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { User, Mail, Coins, Trash2, AlertTriangle, Link2 } from 'lucide-react';
 import SEO from '../components/SEO';
 import ShopAccount from '../components/ShopAccount';
 import { useUser } from '../context/UserContext';
@@ -12,6 +12,9 @@ export default function ProfilePage() {
   const [editPseudo, setEditPseudo] = useState(profile?.pseudo ?? '');
   const [editEmail, setEditEmail] = useState(profile?.email ?? '');
   const [isEditing, setIsEditing] = useState(false);
+  // Arrivée juste après l'inscription : on propose tout de suite de lier le compte Minecraft
+  const [searchParams] = useSearchParams();
+  const bienvenue = searchParams.get('bienvenue') === '1';
 
   if (!isLoggedIn) {
     navigate('/connexion', { replace: true });
@@ -44,6 +47,23 @@ export default function ProfilePage() {
       </section>
       <section className="py-12">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          {profile?.linked === false && (
+            <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-6 text-red-900" role="status">
+              <p className="flex items-center gap-2 text-lg font-bold">
+                <span className="h-3 w-3 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
+                {bienvenue ? 'Compte créé ! Dernière étape : lie ton compte Minecraft' : 'Il te reste une étape : lier ton compte Minecraft'}
+              </p>
+              <p className="mt-2 text-sm">
+                Sans ça, tes achats et tes Écus ne peuvent pas arriver en jeu. Ça prend 10 secondes : un code à taper sur le serveur.
+              </p>
+              <a href="#compte-minecraft" className="mt-3 inline-flex items-center gap-2 font-semibold text-red-900 underline">
+                <Link2 className="h-4 w-4" aria-hidden="true" /> Lier mon compte maintenant
+              </a>
+            </div>
+          )}
+          {/* Liaison au jeu en premier tant qu'elle n'est pas faite */}
+          {profile?.linked === false && <ShopAccount autoCode={bienvenue} />}
+
           {/* Infos personnelles */}
           <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 p-8">
             <h2 className="font-display text-xl text-gray-900 mb-6 flex items-center gap-2">
@@ -141,7 +161,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Liaison au jeu, achats et leur livraison, mouvements d'Écus (données du serveur) */}
-          <ShopAccount />
+          {profile?.linked !== false && <ShopAccount />}
 
           {/* Suppression du compte */}
           <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-red-100 p-8">

@@ -87,8 +87,9 @@ paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateTok
   const amount = ECUS_PRICING_CENTS[ecus];
   const rewardId = ECUS_REWARD_IDS[ecus];
   const frontendUrl = getFrontendUrl(req);
-  const successUrl = `${frontendUrl}/ecus?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${frontendUrl}/ecus?checkout=cancel`;
+  // Retour sur la boutique, qui valide le paiement (confirm-checkout-session) et affiche le nouveau solde
+  const successUrl = `${frontendUrl}/boutique?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${frontendUrl}/boutique?checkout=cancel`;
 
   try {
     const session = await stripe.checkout.sessions.create({

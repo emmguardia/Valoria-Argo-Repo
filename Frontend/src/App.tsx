@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -12,7 +12,6 @@ const WikiPage = lazy(() => import('./pages/WikiPage'));
 const WikiSiegesPage = lazy(() => import('./pages/WikiSiegesPage'));
 const WikiNationsPage = lazy(() => import('./pages/WikiNationsPage'));
 const ConnexionPage = lazy(() => import('./pages/ConnexionPage'));
-const EcusPage = lazy(() => import('./pages/EcusPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const MentionsLegalesPage = lazy(() => import('./pages/MentionsLegalesPage'));
@@ -30,11 +29,30 @@ const AdminStatsPage = lazy(() => import('./pages/admin/AdminStatsPage'));
 const RequireAdmin = lazy(() => import('./components/admin/RequireAdmin'));
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (!hash) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    // Ancre (ex. /boutique#recharger) : la page est chargée en différé, on attend que la section existe
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      const target = document.getElementById(hash.slice(1));
+      if (target || ++tries > 30) {
+        window.clearInterval(timer);
+        target?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [pathname, hash]);
   return null;
+}
+
+// Ancienne page /ecus (liens et retours Stripe d'avant) : la recharge d'Écus est sur la boutique
+function EcusRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={search ? `/boutique${search}` : '/boutique#recharger'} replace />;
 }
 
 // Mesure d'audience anonyme : une page vue envoyée au site, sans cookie ni identifiant (Backend statsService).
@@ -83,7 +101,8 @@ function App() {
               <Route path="/wiki/sieges" element={<WikiSiegesPage />} />
               <Route path="/wiki/nations" element={<WikiNationsPage />} />
               <Route path="/connexion" element={<ConnexionPage />} />
-              <Route path="/ecus" element={<EcusPage />} />
+              {/* Ancienne page des Écus (et retours Stripe d'avant) : tout est sur la boutique */}
+              <Route path="/ecus" element={<EcusRedirect />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/mentions-legales" element={<MentionsLegalesPage />} />
               <Route path="/cgv" element={<CGVPage />} />

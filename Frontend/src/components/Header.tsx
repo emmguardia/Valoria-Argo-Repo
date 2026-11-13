@@ -85,7 +85,7 @@ export default function Header() {
             </Link>
             {isLoggedIn && (
               <Link
-                to="/ecus"
+                to="/boutique#recharger"
                 className="hidden h-11 items-center gap-2 rounded-xl bg-nuit-800 px-3 text-[15px] font-extrabold text-or transition-colors hover:bg-nuit-700 md:inline-flex"
               >
                 <Coins className="h-5 w-5" aria-hidden="true" />
@@ -102,9 +102,17 @@ export default function Header() {
               </Link>
             )}
             <Link
-              to={isLoggedIn ? '/profile' : '/connexion'}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-ciel/12 px-4 text-[15px] font-extrabold text-brume-100 transition-colors hover:bg-ciel/20"
+              to={isLoggedIn ? (profile?.linked === false ? '/profile#compte-minecraft' : '/profile') : '/connexion'}
+              className="relative inline-flex h-11 items-center gap-2 rounded-xl bg-ciel/12 px-4 text-[15px] font-extrabold text-brume-100 transition-colors hover:bg-ciel/20"
             >
+              {/* Pastille rouge : compte Minecraft pas encore lié, une étape reste à faire sur le profil */}
+              {isLoggedIn && profile?.linked === false && (
+                <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5" title="Une étape reste à faire sur ton profil">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex h-3.5 w-3.5 rounded-full border-2 border-nuit-900 bg-red-500" />
+                  <span className="sr-only">Une étape reste à faire : lier ton compte Minecraft</span>
+                </span>
+              )}
               <User className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" />
               <span className="hidden sm:inline">{isLoggedIn ? (profile?.pseudo ?? 'Profil') : 'Connexion'}</span>
               <span className="sm:hidden">{isLoggedIn ? 'Profil' : 'Connexion'}</span>
@@ -150,7 +158,7 @@ export default function Header() {
                 {label}
               </NavLink>
             ))}
-            <Link to="/ecus" className="flex items-center gap-3 rounded-xl px-4 py-3 font-extrabold text-or hover:bg-nuit-800">
+            <Link to="/boutique#recharger" className="flex items-center gap-3 rounded-xl px-4 py-3 font-extrabold text-or hover:bg-nuit-800">
               <Coins className="h-5 w-5" aria-hidden="true" />
               {isLoggedIn ? `${ecus} Écus` : 'Acheter des Écus'}
             </Link>

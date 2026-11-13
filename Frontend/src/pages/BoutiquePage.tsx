@@ -1,14 +1,15 @@
-import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Lock, MessageCircle, Package } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { CheckCircle2, Lock, MessageCircle, Package } from 'lucide-react';
 import SEO from '../components/SEO';
 import ProductCard from '../components/ProductCard';
 import ProductCardSkeleton from '../components/ProductCardSkeleton';
 import ProductModal from '../components/ProductModal';
+import PackCheckoutModal from '../components/PackCheckoutModal';
 import EcuIcon from '../components/EcuIcon';
 import { useProducts } from '../hooks/useProducts';
 import { useUser } from '../context/UserContext';
-import { ECUS_PACKS } from '../data/ecusPacks';
+import { ECUS_PACKS, type EcusPack } from '../data/ecusPacks';
 import type { Product, ProductCategory } from '../data/products';
 
 const categories: { value: ProductCategory | 'all'; label: string }[] = [
@@ -28,13 +29,36 @@ const REASSURANCE = [
 export default function BoutiquePage() {
   const navigate = useNavigate();
   const { products, loading } = useProducts();
-  const { isLoggedIn, ecus, createEcusCheckout } = useUser();
+  const { isLoggedIn, ecus, createEcusCheckout, confirmEcusCheckout } = useUser();
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all'>('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [pendingPack, setPendingPack] = useState<number | null>(null);
-  const [packError, setPackError] = useState<string | null>(null);
-  const [accepte, setAccepte] = useState(false);
+  const [packToBuy, setPackToBuy] = useState<EcusPack | null>(null);
+  // Retour de Stripe : /boutique?checkout=success&session_id=… (validé ici) ou ?checkout=cancel.
+  // Le cas « annulé » est lu dès l'init (react-hooks/set-state-in-effect) ; l'effet valide le paiement et nettoie l'URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handledCheckout = useRef(false);
+  const [checkout, setCheckout] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(() =>
+    searchParams.get('checkout') === 'cancel' ? { tone: 'info', text: 'Paiement annulé : rien n\'a été débité.' } : null,
+  );
+
+  useEffect(() => {
+    const state = searchParams.get('checkout');
+    const sessionId = searchParams.get('session_id');
+    if (!state || handledCheckout.current) return;
+    handledCheckout.current = true;
+    if (state === 'success' && sessionId) {
+      void confirmEcusCheckout(sessionId)
+        .then((r) => setCheckout({
+          tone: 'success',
+          text: r.duplicated ? `Achat déjà validé. Ton solde : ${r.ecus} Écus.` : `Merci ! ${r.credited} Écus ajoutés. Ton solde : ${r.ecus} Écus.`,
+        }))
+        .catch((err) => setCheckout({ tone: 'error', text: err instanceof Error ? err.message : 'Paiement non validé.' }))
+        .finally(() => setSearchParams({}, { replace: true }));
+      return;
+    }
+    setSearchParams({}, { replace: true });
+  }, [confirmEcusCheckout, searchParams, setSearchParams]);
 
   const filteredProducts = useMemo(
     () =>
@@ -44,20 +68,16 @@ export default function BoutiquePage() {
     [products, selectedCategory]
   );
 
-  // Même flux que /ecus : Stripe renvoie sur /ecus?checkout=… qui valide le paiement
-  const handleBuyPack = async (amount: number) => {
+  // Clic sur un pack : la pop-up demande l'accord sur les CGV, puis part sur Stripe (retour sur /boutique)
+  const handleBuyPack = (pack: EcusPack) => {
     if (!isLoggedIn) {
       navigate('/connexion');
       return;
     }
-    try {
-      setPackError(null);
-      setPendingPack(amount);
-      window.location.assign(await createEcusCheckout(amount, accepte));
-    } catch (err) {
-      setPackError(err instanceof Error ? err.message : 'Paiement indisponible pour le moment.');
-      setPendingPack(null);
-    }
+    setPackToBuy(pack);
+  };
+  const payPack = async (amount: number) => {
+    window.location.assign(await createEcusCheckout(amount, true));
   };
 
   return (
@@ -98,6 +118,24 @@ export default function BoutiquePage() {
           </div>
         </div>
       </section>
+
+      {checkout && (
+        <div className="mx-auto max-w-[75rem] px-5 pt-6">
+          <p
+            role="status"
+            className={`flex items-center gap-3 rounded-xl border-2 px-5 py-4 font-bold ${
+              checkout.tone === 'success'
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+                : checkout.tone === 'error'
+                  ? 'border-red-400/40 bg-red-500/10 text-red-200'
+                  : 'border-ciel/30 bg-nuit-800 text-brume-200'
+            }`}
+          >
+            {checkout.tone === 'success' && <CheckCircle2 className="h-6 w-6 shrink-0" aria-hidden="true" />}
+            {checkout.text}
+          </p>
+        </div>
+      )}
 
       {/* Catalogue */}
       <section className="mx-auto max-w-[75rem] px-5 pb-16 pt-8">
@@ -157,15 +195,6 @@ export default function BoutiquePage() {
             Plus le pack est gros, plus le bonus monte. Les Écus ne sont pas des points de vote.
           </p>
         </div>
-        {isLoggedIn && (
-          <label className="mb-8 flex cursor-pointer items-start gap-3 rounded-xl border-2 border-or/30 bg-nuit-850 px-5 py-4 text-sm text-brume-300">
-            <input type="checkbox" checked={accepte} onChange={(e) => setAccepte(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[#f2b33d]" />
-            <span>
-              J'accepte les <Link to="/cgv" className="font-bold text-or underline">conditions générales de vente</Link> et je demande que
-              mes Écus soient crédités tout de suite : je renonce ainsi à mon droit de rétractation de 14 jours.
-            </span>
-          </label>
-        )}
         <ul className="mt-12 grid items-end gap-5 sm:grid-cols-3 lg:grid-cols-5">
           {ECUS_PACKS.map((pack) => (
             <li
@@ -192,21 +221,15 @@ export default function BoutiquePage() {
               </p>
               <button
                 type="button"
-                onClick={() => handleBuyPack(pack.ecus)}
-                disabled={pendingPack !== null || (isLoggedIn && !accepte)}
-                className="btn-3d btn-or mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => handleBuyPack(pack)}
+                className="btn-3d btn-or mt-4 w-full"
               >
-                {pendingPack === pack.ecus ? 'Redirection…' : pack.price}
+                {pack.price}
                 <span className="sr-only"> pour {pack.ecus} Écus</span>
               </button>
             </li>
           ))}
         </ul>
-        {packError && (
-          <p role="alert" className="mt-6 rounded-xl border-2 border-red-400/40 bg-red-500/10 px-5 py-4 text-center font-bold text-red-200">
-            {packError}
-          </p>
-        )}
       </section>
 
       {/* Réassurance */}
@@ -220,6 +243,8 @@ export default function BoutiquePage() {
           ))}
         </ul>
       </section>
+
+      <PackCheckoutModal pack={packToBuy} onClose={() => setPackToBuy(null)} onPay={payPack} />
 
       <ProductModal
         product={selectedProduct}

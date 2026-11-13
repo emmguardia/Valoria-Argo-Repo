@@ -56,7 +56,7 @@ export default function ProductModal({ product, isOpen, onClose, onPurchaseSucce
     }
     if (!canAfford) {
       onClose();
-      navigate('/ecus');
+      navigate('/boutique#recharger');
       return;
     }
     setShowConfirm(true);

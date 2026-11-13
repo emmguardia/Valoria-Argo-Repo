@@ -4,7 +4,7 @@ import SEO from '../components/SEO';
 import { ECUS_PACKS } from '../data/ecusPacks';
 
 // CGV de la boutique : Écus achetés en euros (Stripe), produits achetés en Écus (livrés en jeu par la file du serveur).
-// La renonciation au droit de rétractation est recueillie par la case à cocher des pages /ecus et /boutique.
+// La renonciation au droit de rétractation est recueillie par la pop-up d'achat d'un pack (boutique).
 const SECTIONS: { title: string; body: ReactNode }[] = [
   {
     title: 'I. Identification des parties',

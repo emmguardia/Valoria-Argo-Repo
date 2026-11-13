@@ -131,7 +131,8 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
         pseudo,
         email,
         ecus: 0,
-        role: 'user'
+        role: 'user',
+        linked: false
       }
     });
   } catch (err) {
@@ -165,14 +166,14 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
     let rows: unknown;
     if (identifierPseudo) {
       const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, role, banned_at, banned_reason, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, banned_at, banned_reason, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
         [identifierPseudo]
       );
       rows = result[0];
     } else {
       const emailValue = identifierEmail!;
       const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, role, banned_at, banned_reason, created_at, last_login FROM users WHERE email = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, banned_at, banned_reason, created_at, last_login FROM users WHERE email = ? LIMIT 1',
         [emailValue]
       );
       rows = result[0];
@@ -221,6 +222,7 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
         email: user.email,
         ecus: user.ecus ?? 0,
         role: user.role || 'user',
+        linked: Boolean(user.mc_uuid),
         createdAt: user.created_at,
         lastLogin: user.last_login
       }
@@ -239,7 +241,7 @@ authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
 
     const db = await getDbPool();
     const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, role, banned_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, pseudo, email, ecus, role, mc_uuid, banned_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
       [userId]
     );
     const user = Array.isArray(rows) ? (rows[0] as any) : null;
@@ -255,6 +257,8 @@ authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
       email: user.email,
       ecus: user.ecus ?? 0,
       role: user.role || 'user',
+      // Compte Minecraft lié (/lier) : sinon le site invite à le faire (pastille sur le profil)
+      linked: Boolean(user.mc_uuid),
       createdAt: user.created_at,
       lastLogin: user.last_login
     });
@@ -330,6 +334,8 @@ authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
       email: user.email,
       ecus: user.ecus ?? 0,
       role: user.role || 'user',
+      // Compte Minecraft lié (/lier) : sinon le site invite à le faire (pastille sur le profil)
+      linked: Boolean(user.mc_uuid),
       createdAt: user.created_at,
       lastLogin: user.last_login
     });

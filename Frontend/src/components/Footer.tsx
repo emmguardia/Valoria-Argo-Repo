@@ -18,7 +18,7 @@ const columns = [
     links: [
       { to: '/connexion', label: 'Connexion' },
       { to: '/boutique', label: 'Boutique' },
-      { to: '/ecus', label: 'Acheter des Écus' },
+      { to: '/boutique#recharger', label: 'Acheter des Écus' },
     ],
   },
   {

@@ -41,7 +41,7 @@ export default function ConnexionPage() {
                   Boutique
                 </Link>
                 <Link
-                  to="/ecus"
+                  to="/boutique#recharger"
                   className="px-6 py-3 rounded-xl border-2 border-[#1e3a5f] text-[#1e3a5f] font-semibold hover:bg-[#1e3a5f]/5 transition-colors"
                 >
                   Acheter des Écus
@@ -172,7 +172,7 @@ export default function ConnexionPage() {
                   const password = passwordInput?.value ?? '';
 
                   void register({ pseudo, email, password })
-                    .then(() => navigate('/boutique'))
+                    .then(() => navigate('/profile?bienvenue=1'))
                     .catch((err) => window.alert(err instanceof Error ? err.message : 'Erreur inscription'));
                 }}
               >

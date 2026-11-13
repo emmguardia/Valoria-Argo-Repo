@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Link2, ShoppingBag, Coins, RefreshCw } from 'lucide-react';
 import { useUser } from '../context/UserContext';
@@ -32,8 +32,9 @@ const REASONS: Record<string, string> = {
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-export default function ShopAccount() {
-  const { token } = useUser();
+/** autoCode : demande le code de liaison dès l'affichage (arrivée juste après l'inscription). */
+export default function ShopAccount({ autoCode = false }: { autoCode?: boolean }) {
+  const { token, refreshUserData } = useUser();
   const [data, setData] = useState<ShopMe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
@@ -61,12 +62,36 @@ export default function ShopAccount() {
     else setError(payload?.error || `Erreur ${res.status}`);
   };
 
+  // Juste après l'inscription : le code est demandé tout seul
+  const asked = useRef(false);
+  useEffect(() => {
+    if (autoCode && data && !data.linked && !asked.current) {
+      asked.current = true;
+      void askCode();
+    }
+  });
+
+  // Code affiché : on regarde toutes les 5 s si le joueur l'a tapé en jeu ; une fois lié, la pastille du profil disparaît
+  const linked = data?.linked;
+  useEffect(() => {
+    if (!code || linked) return;
+    const timer = window.setInterval(() => { void load(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [code, linked, load]);
+  useEffect(() => {
+    if (linked) void refreshUserData().catch(() => {});
+  }, [linked, refreshUserData]);
+
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-lg shadow-slate-900/5 border border-gray-100 p-8">
+      <div
+        id="compte-minecraft"
+        className={`scroll-mt-28 bg-white rounded-2xl shadow-lg shadow-slate-900/5 p-8 border ${data && !data.linked ? 'border-2 border-red-300' : 'border-gray-100'}`}
+      >
         <h2 className="font-display text-xl text-gray-900 mb-4 flex items-center gap-2">
           <Link2 className="w-6 h-6 text-[#1e3a5f]" />
           Compte Minecraft
+          {data && !data.linked && <span className="ml-auto rounded-full bg-red-500 px-2.5 py-0.5 text-xs font-bold text-white">À faire</span>}
         </h2>
         {data?.linked ? (
           <p className="text-gray-700">
@@ -78,8 +103,8 @@ export default function ShopAccount() {
             <p>Pour recevoir tes achats en jeu, relie ton compte au joueur <strong>{data?.pseudo ?? '…'}</strong> :</p>
             {code ? (
               <p className="rounded-xl bg-[#1e3a5f]/5 p-4">
-                En jeu, tape <code className="font-bold text-[#1e3a5f]">/lier {code.code}</code> (valable jusqu'à{' '}
-                {new Date(code.expiresAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}).
+                Connecte-toi au serveur avec ce pseudo, puis tape <code className="font-bold text-[#1e3a5f]">/lier {code.code}</code> (valable jusqu'à{' '}
+                {new Date(code.expiresAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}). Cette page se met à jour toute seule.
               </p>
             ) : (
               <button type="button" onClick={askCode} className="px-6 py-3 rounded-xl bg-[#1e3a5f] text-white font-semibold hover:bg-[#152a45]">

@@ -11,6 +11,8 @@ export interface UserProfile {
   pseudo: string;
   email: string;
   role?: 'user' | 'admin';
+  /** Compte Minecraft lié (/lier) ; false : pastille rouge sur le profil pour inviter à le faire */
+  linked?: boolean;
 }
 
 interface UserContextType {
@@ -118,6 +120,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       pseudo: String(payload.pseudo || ''),
       email: String(payload.email || ''),
       role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+      linked: Boolean(payload.linked),
     };
     const newEcus = Number(payload.ecus ?? 0);
     setProfile(newProfile);
@@ -146,6 +149,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         pseudo: String(user.pseudo || ''),
         email: String(user.email || ''),
         role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+        linked: Boolean(user.linked),
       };
 
       setToken(tokenValue);
@@ -192,6 +196,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         pseudo: String(user.pseudo || ''),
         email: String(user.email || ''),
         role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+        linked: Boolean(user.linked),
       };
 
       setToken(tokenValue);
@@ -253,6 +258,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             pseudo: String(payload?.pseudo || ''),
             email: String(payload?.email || ''),
             role: (payload?.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+            linked: profile?.linked,
           };
 
           setProfile(newProfile);
@@ -263,7 +269,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           window.alert(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
         });
     },
-    [token, ecus, persist, purchaseHistory]
+    [token, ecus, persist, purchaseHistory, profile?.linked]
   );
 
   const deleteAccount = useCallback(async () => {
@@ -357,6 +363,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       pseudo: String(payload.pseudo || ''),
       email: String(payload.email || ''),
       role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+      linked: Boolean(payload.linked),
     };
         const newEcus = Number(payload.ecus ?? 0);
         setProfile(newProfile);
