@@ -6,6 +6,7 @@ import { getDbPool } from '../db/mysql.js';
 import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { authReadLimiter, authWriteLimiter } from '../middleware/rateLimitMiddleware.js';
+import { hashToken, RESEND_SECONDS, sendVerificationEmail } from '../services/emailVerification.js';
 
 const authRouter = Router();
 
@@ -111,6 +112,9 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
       return res.status(500).json({ error: 'Impossible de créer le compte' });
     }
 
+    // Lien de vérification de l'adresse (l'échec de l'envoi ne bloque pas l'inscription : renvoi possible du profil)
+    const mailSent = await sendVerificationEmail(db, { id: insertedId, pseudo, email });
+
     const token = jwt.sign(
       { userId: insertedId, pseudo, email, role: 'user' },
       requireJwtPrivateKey(),
@@ -132,7 +136,9 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
         email,
         ecus: 0,
         role: 'user',
-        linked: false
+        linked: false,
+        emailVerified: false,
+        verificationSent: mailSent
       }
     });
   } catch (err) {
@@ -166,14 +172,14 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
     let rows: unknown;
     if (identifierPseudo) {
       const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, banned_at, banned_reason, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, email_verified_at, banned_at, banned_reason, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
         [identifierPseudo]
       );
       rows = result[0];
     } else {
       const emailValue = identifierEmail!;
       const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, banned_at, banned_reason, created_at, last_login FROM users WHERE email = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, email_verified_at, banned_at, banned_reason, created_at, last_login FROM users WHERE email = ? LIMIT 1',
         [emailValue]
       );
       rows = result[0];
@@ -223,6 +229,7 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
         ecus: user.ecus ?? 0,
         role: user.role || 'user',
         linked: Boolean(user.mc_uuid),
+        emailVerified: Boolean(user.email_verified_at),
         createdAt: user.created_at,
         lastLogin: user.last_login
       }
@@ -241,7 +248,7 @@ authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
 
     const db = await getDbPool();
     const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, role, mc_uuid, banned_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, pseudo, email, ecus, role, mc_uuid, email_verified_at, banned_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
       [userId]
     );
     const user = Array.isArray(rows) ? (rows[0] as any) : null;
@@ -259,6 +266,7 @@ authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
       role: user.role || 'user',
       // Compte Minecraft lié (/lier) : sinon le site invite à le faire (pastille sur le profil)
       linked: Boolean(user.mc_uuid),
+      emailVerified: Boolean(user.email_verified_at),
       createdAt: user.created_at,
       lastLogin: user.last_login
     });
@@ -266,6 +274,56 @@ authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
     console.error('[auth/me GET] error:', err);
     const details = formatUnknownError(err);
     return res.status(500).json({ error: 'Erreur serveur', details });
+  }
+});
+
+// Lien reçu par e-mail : /verifier-email?jeton=… sur le site, qui appelle cette route
+authRouter.post('/verify-email', authWriteLimiter, async (req, res) => {
+  const parsed = z.object({ token: z.string().regex(/^[0-9a-f]{64}$/) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Lien invalide' });
+  try {
+    const db = await getDbPool();
+    const [rows] = await db.execute(
+      'SELECT id, email_verify_expires < NOW() AS expired FROM users WHERE email_verify_hash = ? LIMIT 1',
+      [hashToken(parsed.data.token)]
+    );
+    const user = Array.isArray(rows) ? (rows[0] as any) : null;
+    if (!user) return res.status(400).json({ error: 'Lien invalide ou déjà utilisé' });
+    if (Number(user.expired)) return res.status(410).json({ error: 'Lien expiré : demande-en un nouveau depuis ton profil' });
+    await db.execute(
+      'UPDATE users SET email_verified_at = NOW(), email_verify_hash = NULL, email_verify_expires = NULL WHERE id = ?',
+      [user.id]
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[auth/verify-email] error:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Renvoyer le lien (profil), au plus une fois par minute
+authRouter.post('/resend-verification', authWriteLimiter, authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).user?.userId as string | undefined;
+    if (!userId) return res.status(401).json({ error: 'Token invalide' });
+    const db = await getDbPool();
+    const [rows] = await db.execute(
+      `SELECT id, pseudo, email, email_verified_at, TIMESTAMPDIFF(SECOND, email_verify_sent_at, NOW()) AS since
+         FROM users WHERE id = ? LIMIT 1`,
+      [userId]
+    );
+    const user = Array.isArray(rows) ? (rows[0] as any) : null;
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    if (user.email_verified_at) return res.json({ ok: true, alreadyVerified: true });
+    if (user.since !== null && Number(user.since) < RESEND_SECONDS) {
+      return res.status(429).json({ error: `Patiente encore ${RESEND_SECONDS - Number(user.since)} s avant un nouvel envoi` });
+    }
+    const sent = await sendVerificationEmail(db, { id: String(user.id), pseudo: user.pseudo, email: user.email });
+    if (!sent) return res.status(502).json({ error: 'L\'e-mail n\'a pas pu partir, réessaie dans quelques minutes' });
+    return res.json({ ok: true, email: user.email });
+  } catch (err) {
+    console.error('[auth/resend-verification] error:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
@@ -320,9 +378,16 @@ authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
     } else if (updateData.email) {
       await db.execute('UPDATE users SET email = ? WHERE id = ?', [updateData.email, userId]);
     }
+    // Nouvelle adresse : elle doit être confirmée à son tour
+    if (updateData.email) {
+      const [current] = await db.execute('SELECT pseudo FROM users WHERE id = ? LIMIT 1', [userId]);
+      await db.execute('UPDATE users SET email_verified_at = NULL WHERE id = ?', [userId]);
+      const pseudoNow = Array.isArray(current) && current[0] ? String((current[0] as any).pseudo) : '';
+      await sendVerificationEmail(db, { id: userId, pseudo: pseudoNow, email: updateData.email });
+    }
 
     const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, role, created_at, last_login FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, pseudo, email, ecus, role, mc_uuid, email_verified_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
       [userId]
     );
     const user = Array.isArray(rows) ? (rows[0] as any) : null;
@@ -336,6 +401,7 @@ authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
       role: user.role || 'user',
       // Compte Minecraft lié (/lier) : sinon le site invite à le faire (pastille sur le profil)
       linked: Boolean(user.mc_uuid),
+      emailVerified: Boolean(user.email_verified_at),
       createdAt: user.created_at,
       lastLogin: user.last_login
     });

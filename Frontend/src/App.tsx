@@ -18,6 +18,7 @@ const MentionsLegalesPage = lazy(() => import('./pages/MentionsLegalesPage'));
 const CGVPage = lazy(() => import('./pages/CGVPage'));
 const ReglesPage = lazy(() => import('./pages/ReglesPage'));
 const RejoindrePage = lazy(() => import('./pages/RejoindrePage'));
+const VerifierEmailPage = lazy(() => import('./pages/VerifierEmailPage'));
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage'));
@@ -108,6 +109,7 @@ function App() {
               <Route path="/cgv" element={<CGVPage />} />
               <Route path="/regles" element={<ReglesPage />} />
               <Route path="/rejoindre" element={<RejoindrePage />} />
+              <Route path="/verifier-email" element={<VerifierEmailPage />} />
               <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
                 <Route index element={<AdminDashboardPage />} />
                 <Route path="products" element={<AdminProductsPage />} />

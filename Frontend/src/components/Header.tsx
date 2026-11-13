@@ -102,15 +102,15 @@ export default function Header() {
               </Link>
             )}
             <Link
-              to={isLoggedIn ? (profile?.linked === false ? '/profile#compte-minecraft' : '/profile') : '/connexion'}
+              to={isLoggedIn ? (profile?.linked === false && profile?.emailVerified !== false ? '/profile#compte-minecraft' : '/profile') : '/connexion'}
               className="relative inline-flex h-11 items-center gap-2 rounded-xl bg-ciel/12 px-4 text-[15px] font-extrabold text-brume-100 transition-colors hover:bg-ciel/20"
             >
-              {/* Pastille rouge : compte Minecraft pas encore lié, une étape reste à faire sur le profil */}
-              {isLoggedIn && profile?.linked === false && (
+              {/* Pastille rouge : compte Minecraft pas lié ou e-mail pas confirmé, une étape reste à faire sur le profil */}
+              {isLoggedIn && (profile?.linked === false || profile?.emailVerified === false) && (
                 <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5" title="Une étape reste à faire sur ton profil">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex h-3.5 w-3.5 rounded-full border-2 border-nuit-900 bg-red-500" />
-                  <span className="sr-only">Une étape reste à faire : lier ton compte Minecraft</span>
+                  <span className="sr-only">Une étape reste à faire sur ton profil</span>
                 </span>
               )}
               <User className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" />

@@ -13,6 +13,8 @@ export interface UserProfile {
   role?: 'user' | 'admin';
   /** Compte Minecraft lié (/lier) ; false : pastille rouge sur le profil pour inviter à le faire */
   linked?: boolean;
+  /** Adresse e-mail confirmée (lien reçu à l'inscription) ; obligatoire pour acheter des Écus */
+  emailVerified?: boolean;
 }
 
 interface UserContextType {
@@ -121,6 +123,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       email: String(payload.email || ''),
       role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
       linked: Boolean(payload.linked),
+      emailVerified: Boolean(payload.emailVerified),
     };
     const newEcus = Number(payload.ecus ?? 0);
     setProfile(newProfile);
@@ -150,6 +153,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         email: String(user.email || ''),
         role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
         linked: Boolean(user.linked),
+        emailVerified: Boolean(user.emailVerified),
       };
 
       setToken(tokenValue);
@@ -197,6 +201,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         email: String(user.email || ''),
         role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
         linked: Boolean(user.linked),
+        emailVerified: Boolean(user.emailVerified),
       };
 
       setToken(tokenValue);
@@ -258,7 +263,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             pseudo: String(payload?.pseudo || ''),
             email: String(payload?.email || ''),
             role: (payload?.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
-            linked: profile?.linked,
+            linked: Boolean(payload?.linked),
+            emailVerified: Boolean(payload?.emailVerified),
           };
 
           setProfile(newProfile);
@@ -269,7 +275,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           window.alert(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
         });
     },
-    [token, ecus, persist, purchaseHistory, profile?.linked]
+    [token, ecus, persist, purchaseHistory]
   );
 
   const deleteAccount = useCallback(async () => {
@@ -364,6 +370,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       email: String(payload.email || ''),
       role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
       linked: Boolean(payload.linked),
+      emailVerified: Boolean(payload.emailVerified),
     };
         const newEcus = Number(payload.ecus ?? 0);
         setProfile(newProfile);

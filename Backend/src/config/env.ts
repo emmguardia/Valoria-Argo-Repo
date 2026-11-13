@@ -17,6 +17,11 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(10).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(10).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(10).optional(),
+  // Email-Service du homelab (vérification des adresses) : URL interne au cluster et clé de signature de ses jetons
+  EMAIL_SERVICE_URL: z.string().url().default('http://email-service.email-service.svc.cluster.local:8080'),
+  EMAIL_SERVICE_PRIVATE_KEY: z.string().min(10).optional(),
+  // Adresse publique du site, pour les liens envoyés par e-mail (jamais déduite de la requête)
+  PUBLIC_SITE_URL: z.string().url().default('https://valoria.zenixweb.fr'),
   // Jeton partagé avec le plugin du serveur Minecraft : il protège /api/server (le serveur vient chercher ses commandes).
   VALORIA_SERVER_TOKEN: z.string().min(32).optional(),
   RCON_HOST: z.string().min(1).optional(),

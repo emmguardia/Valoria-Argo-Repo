@@ -102,6 +102,14 @@ spec:
               name: valoria-secrets
               key: stripe-publishable-key
               optional: true
+        # Email-Service du homelab : vérification des adresses e-mail, envoyées depuis valoria@zenixweb.fr.
+        # La clé signe les jetons d'accès à l'Email-Service (copie scellée de la sienne).
+        - name: EMAIL_SERVICE_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: email-service-jwt-key
+              optional: true
         # Secret de signature du webhook Stripe (whsec_…) : sans lui, les avis de paiement de Stripe sont ignorés et
         # les Écus ne sont crédités que si l'acheteur revient sur /ecus après le paiement
         - name: STRIPE_WEBHOOK_SECRET

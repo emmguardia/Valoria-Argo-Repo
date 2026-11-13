@@ -83,6 +83,14 @@ paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateTok
     return res.status(400).json({ error: 'Pseudo Minecraft invalide' });
   }
 
+  // Acheter demande une adresse e-mail confirmée (reçu Stripe, support en cas de souci)
+  const dbPool = await getDbPool();
+  const [verified] = await dbPool.execute('SELECT email_verified_at FROM users WHERE id = ? LIMIT 1', [user.userId]);
+  const row = Array.isArray(verified) ? (verified[0] as any) : null;
+  if (!row?.email_verified_at) {
+    return res.status(403).json({ error: 'Confirme d\'abord ton adresse e-mail (lien envoyé à l\'inscription, renvoi possible depuis ton profil).', code: 'email_non_verifie' });
+  }
+
   const { ecus } = parsed.data;
   const amount = ECUS_PRICING_CENTS[ecus];
   const rewardId = ECUS_REWARD_IDS[ecus];

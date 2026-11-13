@@ -29,7 +29,7 @@ const REASSURANCE = [
 export default function BoutiquePage() {
   const navigate = useNavigate();
   const { products, loading } = useProducts();
-  const { isLoggedIn, ecus, createEcusCheckout, confirmEcusCheckout } = useUser();
+  const { isLoggedIn, ecus, profile, createEcusCheckout, confirmEcusCheckout } = useUser();
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all'>('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -244,7 +244,7 @@ export default function BoutiquePage() {
         </ul>
       </section>
 
-      <PackCheckoutModal pack={packToBuy} onClose={() => setPackToBuy(null)} onPay={payPack} />
+      <PackCheckoutModal pack={packToBuy} emailVerified={profile?.emailVerified} onClose={() => setPackToBuy(null)} onPay={payPack} />
 
       <ProductModal
         product={selectedProduct}

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Mail, Coins, Trash2, AlertTriangle, Link2 } from 'lucide-react';
+import { User, Mail, Coins, Trash2, AlertTriangle, Link2, MailCheck } from 'lucide-react';
 import SEO from '../components/SEO';
 import ShopAccount from '../components/ShopAccount';
 import { useUser } from '../context/UserContext';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { isLoggedIn, ecus, profile, updateProfile, deleteAccount } = useUser();
+  const { isLoggedIn, ecus, profile, token, updateProfile, deleteAccount } = useUser();
+  const [resend, setResend] = useState<{ busy: boolean; text: string | null }>({ busy: false, text: null });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editPseudo, setEditPseudo] = useState(profile?.pseudo ?? '');
   const [editEmail, setEditEmail] = useState(profile?.email ?? '');
@@ -20,6 +21,18 @@ export default function ProfilePage() {
     navigate('/connexion', { replace: true });
     return null;
   }
+
+  // Adresse e-mail pas encore confirmée : renvoyer le lien (au plus une fois par minute)
+  const resendMail = async () => {
+    if (!token) return;
+    setResend({ busy: true, text: null });
+    const res = await fetch('/api/auth/resend-verification', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    const payload = await res.json().catch(() => ({}));
+    setResend({
+      busy: false,
+      text: res.ok ? `E-mail envoyé à ${payload.email ?? profile?.email}. Pense à regarder dans les spams.` : payload?.error || `Erreur ${res.status}`,
+    });
+  };
 
   const handleSaveProfile = () => {
     updateProfile({ pseudo: editPseudo.trim(), email: editEmail.trim() });
@@ -47,6 +60,26 @@ export default function ProfilePage() {
       </section>
       <section className="py-12">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          {profile?.emailVerified === false && (
+            <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-6 text-red-900" role="status">
+              <p className="flex items-center gap-2 text-lg font-bold">
+                <span className="h-3 w-3 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
+                Confirme ton adresse e-mail
+              </p>
+              <p className="mt-2 text-sm">
+                On t'a envoyé un lien à <strong>{profile.email}</strong> (expéditeur valoria@zenixweb.fr). Il faut le confirmer pour acheter des Écus.
+              </p>
+              <button
+                type="button"
+                onClick={resendMail}
+                disabled={resend.busy}
+                className="mt-3 inline-flex items-center gap-2 font-semibold text-red-900 underline disabled:opacity-60"
+              >
+                <MailCheck className="h-4 w-4" aria-hidden="true" /> {resend.busy ? 'Envoi…' : 'Renvoyer l\'e-mail'}
+              </button>
+              {resend.text && <p className="mt-2 text-sm">{resend.text}</p>}
+            </div>
+          )}
           {profile?.linked === false && (
             <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-6 text-red-900" role="status">
               <p className="flex items-center gap-2 text-lg font-bold">

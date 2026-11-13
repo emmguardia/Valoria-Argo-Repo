@@ -8,11 +8,13 @@ import type { EcusPack } from '../data/ecusPacks';
 // au moment où l'on clique sur un pack, puis on part sur la page de paiement Stripe.
 interface PackCheckoutModalProps {
   pack: EcusPack | null;
+  /** false : adresse e-mail pas encore confirmée, l'achat est refusé tant qu'elle ne l'est pas */
+  emailVerified?: boolean;
   onClose: () => void;
   onPay: (ecus: number) => Promise<void>;
 }
 
-export default function PackCheckoutModal({ pack, onClose, onPay }: PackCheckoutModalProps) {
+export default function PackCheckoutModal({ pack, emailVerified, onClose, onPay }: PackCheckoutModalProps) {
   const [accepte, setAccepte] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +57,12 @@ export default function PackCheckoutModal({ pack, onClose, onPay }: PackCheckout
           <p className="mt-2 text-lg font-extrabold text-or">{pack.price}{pack.bonus ? ` · bonus ${pack.bonus}` : ''}</p>
           <p className="mt-2 text-sm text-brume-500">Paiement par carte sur la page sécurisée de Stripe. Les Écus arrivent sur ton compte juste après.</p>
         </div>
+        {emailVerified === false && (
+          <p className="mt-6 rounded-xl border-2 border-red-400/40 bg-red-500/10 p-4 text-sm text-red-200" role="alert">
+            Confirme d'abord ton adresse e-mail : clique sur le lien reçu à l'inscription, ou renvoie-le depuis ton{' '}
+            <Link to="/profile" className="font-bold underline" onClick={onClose}>profil</Link>.
+          </p>
+        )}
         <label className="mt-7 flex cursor-pointer items-start gap-3 rounded-xl border-2 border-or/40 bg-nuit-850 px-5 py-4 text-left text-[15px] text-brume-200">
           <input
             type="checkbox"
@@ -70,7 +78,7 @@ export default function PackCheckoutModal({ pack, onClose, onPay }: PackCheckout
         {error && <p className="mt-4 rounded-xl bg-red-500/15 p-3 text-sm text-red-200" role="alert">{error}</p>}
         <div className="mt-7 flex gap-4">
           <button onClick={onClose} disabled={busy} className="btn-3d btn-nuit flex-1">Annuler</button>
-          <button onClick={pay} disabled={!accepte || busy} className="btn-3d btn-or flex-1 disabled:cursor-not-allowed disabled:opacity-50">
+          <button onClick={pay} disabled={!accepte || busy || emailVerified === false} className="btn-3d btn-or flex-1 disabled:cursor-not-allowed disabled:opacity-50">
             {busy ? 'Redirection…' : `Payer ${pack.price}`}
           </button>
         </div>
