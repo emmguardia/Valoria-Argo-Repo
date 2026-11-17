@@ -71,7 +71,14 @@ export default function Footer() {
         ))}
       </div>
       <p className="mx-auto mt-12 max-w-[75rem] border-t border-ciel/10 pt-6 text-sm text-brume-600">
-        © 2026 Valoria · Serveur non affilié à Mojang ni à Microsoft.
+        © 2026 Valoria · Serveur non affilié à Mojang ni à Microsoft. ·{' '}
+        <a href="https://www.serveursminecraft.org/serveur/7830/" className="underline hover:text-brume-300">
+          Voter pour Valoria
+        </a>{' '}
+        sur le classement de{' '}
+        <a href="https://www.serveursminecraft.org/" className="underline hover:text-brume-300">
+          ServeursMinecraft.org
+        </a>
       </p>
     </footer>
   );

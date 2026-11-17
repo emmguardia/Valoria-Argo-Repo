@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ExternalLink } from 'lucide-react';
+import { Check, ExternalLink, RefreshCw } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useUser } from '../context/UserContext';
 
@@ -8,6 +8,7 @@ interface SiteMeta {
   key: string;
   name: string;
   voteUrl: string | null;
+  pseudoParam: string | null;
   enabled: boolean;
 }
 
@@ -22,6 +23,22 @@ interface UserVoteStats {
   totalVotesMonth: number;
   lastVote: string | null;
   todaySites: string[];
+}
+
+// Réponses de /api/votes/check/:site quand le vote n'est pas compté
+const CHECK_MESSAGES: Record<string, string> = {
+  not_voted: 'Vote introuvable pour ce pseudo. Vote d’abord, puis réessaie dans quelques secondes.',
+  already_claimed: 'Ce vote a déjà été récompensé.',
+  already_voted_today: 'Déjà récompensé aujourd’hui sur ce site.',
+  ip_already_used: 'Un vote depuis ta connexion a déjà été récompensé aujourd’hui sur ce site.',
+  site_disabled: 'Ce site n’est pas encore actif.',
+};
+
+const PSEUDO_KEY = 'valoria-vote-pseudo';
+const PSEUDO_RE = /^[a-zA-Z0-9_]{2,32}$/;
+
+function savedPseudo(): string {
+  try { return localStorage.getItem(PSEUDO_KEY) ?? ''; } catch { return ''; }
 }
 
 // Podium affiché 2 - 1 - 3, comme sur une vraie estrade
@@ -40,6 +57,53 @@ export default function VotesPage() {
   const [statsEntry, setStatsEntry] = useState<{ token: string; data: UserVoteStats } | null>(null);
   const stats = isLoggedIn && token && statsEntry?.token === token ? statsEntry.data : null;
   const [loading, setLoading] = useState(true);
+  // Sans compte, le joueur saisit son pseudo Minecraft (gardé dans le navigateur)
+  const [typedPseudo, setTypedPseudo] = useState(savedPseudo);
+  const pseudo = isLoggedIn && profile ? profile.pseudo : typedPseudo.trim();
+  const pseudoOk = PSEUDO_RE.test(pseudo);
+  // Sites validés pendant cette visite, vérification en cours et dernier message par site
+  const [validated, setValidated] = useState<string[]>([]);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, { ok: boolean; text: string }>>({});
+
+  const changePseudo = (value: string) => {
+    setTypedPseudo(value);
+    try { localStorage.setItem(PSEUDO_KEY, value.trim()); } catch { /* stockage indisponible */ }
+  };
+
+  const voteLink = (site: SiteMeta) => {
+    if (!site.voteUrl || !site.pseudoParam || !pseudoOk) return site.voteUrl ?? undefined;
+    const url = new URL(site.voteUrl);
+    url.searchParams.set(site.pseudoParam, pseudo);
+    return url.toString();
+  };
+
+  const checkVote = async (site: SiteMeta) => {
+    if (!pseudoOk) {
+      setNotes((n) => ({ ...n, [site.key]: { ok: false, text: 'Indique d’abord ton pseudo Minecraft.' } }));
+      return;
+    }
+    setChecking(site.key);
+    try {
+      const res = await fetch(`/api/votes/check/${site.key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ pseudo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setValidated((v) => [...v, site.key]);
+        setNotes((n) => ({ ...n, [site.key]: { ok: true, text: `Vote compté ! Récompense envoyée à ${pseudo} en jeu.` } }));
+      } else {
+        const text = CHECK_MESSAGES[data.reason] ?? data.error ?? 'Le site de vote ne répond pas, réessaie dans un instant.';
+        setNotes((n) => ({ ...n, [site.key]: { ok: false, text } }));
+      }
+    } catch {
+      setNotes((n) => ({ ...n, [site.key]: { ok: false, text: 'Connexion impossible, réessaie dans un instant.' } }));
+    } finally {
+      setChecking(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -78,7 +142,7 @@ export default function VotesPage() {
     return () => { cancelled = true; };
   }, [isLoggedIn, token]);
 
-  const todaySites = stats?.todaySites ?? [];
+  const todaySites = [...(stats?.todaySites ?? []), ...validated];
   const activeSites = sites.filter((s) => s.enabled && s.voteUrl);
   const doneToday = activeSites.filter((s) => todaySites.includes(s.key)).length;
   const progress = activeSites.length ? Math.round((doneToday / activeSites.length) * 100) : 0;
@@ -98,7 +162,7 @@ export default function VotesPage() {
             Fais résonner ta bannière
           </h1>
           <p className="mt-3.5 max-w-xl text-lg font-semibold leading-relaxed text-brume-200">
-            Chaque vote te donne une récompense en jeu (/fvote) et te fait grimper au classement du mois. Un vote par site toutes les 24 h.
+            Vote sur chaque site, puis clique sur « J’ai voté » : la récompense arrive en jeu et tu grimpes au classement du mois. Un vote récompensé par site et par jour.
           </p>
         </div>
       </section>
@@ -142,11 +206,25 @@ export default function VotesPage() {
                 </p>
               </>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-col gap-4">
+                <label htmlFor="vote-pseudo" className="text-xs font-black uppercase tracking-[0.16em] text-brume-600">
+                  Ton pseudo Minecraft
+                </label>
+                <input
+                  id="vote-pseudo"
+                  type="text"
+                  autoComplete="nickname"
+                  spellCheck={false}
+                  maxLength={32}
+                  value={typedPseudo}
+                  onChange={(e) => changePseudo(e.target.value)}
+                  placeholder="Pseudo exact, comme en jeu"
+                  className="min-h-12 w-full max-w-sm rounded-xl border-2 border-ciel/25 bg-nuit-900 px-4 text-lg font-bold text-white placeholder-brume-600 outline-none focus:border-or"
+                />
                 <p className="max-w-md text-[15px] leading-relaxed text-brume-300">
-                  Vote avec ton pseudo Minecraft, une fois par jour sur chaque site. Connecte-toi pour suivre tes votes du jour et du mois.
+                  Utilise le même pseudo sur les sites de vote.{' '}
+                  <Link to="/connexion" className="font-extrabold text-or underline">Connecte-toi</Link> pour suivre tes votes du mois.
                 </p>
-                <Link to="/connexion" className="btn-3d btn-or">Connexion</Link>
               </div>
             )}
           </div>
@@ -175,7 +253,7 @@ export default function VotesPage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-display text-[1.3rem] text-white">{site.name}</p>
                       <p className={`mt-0.5 text-sm font-extrabold ${votedToday ? 'text-emerald-300' : 'text-brume-600'}`}>
-                        {votedToday ? 'Déjà voté aujourd’hui' : available ? '1 vote toutes les 24 h' : 'Bientôt'}
+                        {votedToday ? 'Déjà voté aujourd’hui' : available ? '1 vote récompensé par jour' : 'Bientôt'}
                       </p>
                     </div>
                     {votedToday ? (
@@ -184,17 +262,33 @@ export default function VotesPage() {
                         Voté
                       </span>
                     ) : available ? (
-                      <a
-                        href={site.voteUrl ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn-3d btn-or min-h-12 px-5 text-lg"
-                      >
-                        Voter
-                        <span className="sr-only"> sur {site.name} (nouvel onglet)</span>
-                        <ExternalLink className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
-                      </a>
+                      <div className="flex flex-wrap gap-2.5">
+                        <a
+                          href={voteLink(site)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-3d btn-or min-h-12 px-5 text-lg"
+                        >
+                          Voter
+                          <span className="sr-only"> sur {site.name} (nouvel onglet)</span>
+                          <ExternalLink className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => checkVote(site)}
+                          disabled={checking === site.key}
+                          className="btn-3d btn-nuit min-h-12 px-5 text-lg"
+                        >
+                          <RefreshCw className={`h-[18px] w-[18px] ${checking === site.key ? 'animate-spin' : ''}`} strokeWidth={2.6} aria-hidden="true" />
+                          J’ai voté
+                        </button>
+                      </div>
                     ) : null}
+                    {notes[site.key] && (
+                      <p role="status" className={`basis-full text-[15px] font-bold ${notes[site.key].ok ? 'text-emerald-300' : 'text-brume-300'}`}>
+                        {notes[site.key].text}
+                      </p>
+                    )}
                   </li>
                 );
               })}

@@ -62,6 +62,17 @@ export async function recordVoteAndReward(args: {
   }
 }
 
+// Sites vérifiés par IP : cette IP a-t-elle déjà valu un vote aujourd'hui sur ce site (pour n'importe quel pseudo) ?
+export async function ipVotedToday(siteName: string, ip: string): Promise<boolean> {
+  if (!ip) return false;
+  const db = await getDbPool();
+  const [rows] = await db.execute(
+    'SELECT 1 FROM votes WHERE site_name = ? AND callback_ip = ? AND voted_day = CURRENT_DATE() LIMIT 1',
+    [siteName, ip]
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 export async function getMonthlyLeaderboard(limit = 100) {
   const db = await getDbPool();
   const [rows] = await db.execute(

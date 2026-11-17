@@ -1,176 +1,133 @@
 import { env } from '../config/env.js';
 
-export type VoteSiteKey = 'minecraft-serveur' | 'serveurs-minecraft' | 'top-serveurs' | 'minecraft-mp';
+export type VoteSiteKey = 'serveur-prive' | 'top-serveurs' | 'serveursminecraft' | 'liste-serveurs-minecraft';
 
 export interface VoteSiteMeta {
   key: VoteSiteKey;
   name: string;
   voteUrl: string | null;
+  // Paramètre d'URL qui pré-remplit le pseudo sur la page de vote du site (null si le site n'en a pas)
+  pseudoParam: string | null;
   enabled: boolean;
+}
+
+export interface VoteCheckInput {
+  mcUsername: string;
+  ip: string;
 }
 
 export interface VoteValidationResult {
   ok: boolean;
-  mcUsername?: string;
   reason?: string;
 }
 
-function sanitizeMcUsername(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const v = raw.trim();
-  if (!/^[a-zA-Z0-9_]{2,32}$/.test(v)) return null;
-  return v;
-}
+// Aucun site de vote ne prévient Valoria quand quelqu'un vote : c'est le joueur qui demande la vérification
+// (« J'ai voté ») et le backend interroge l'API officielle du site, par pseudo ou par l'IP du joueur.
 
-async function fetchJsonWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<any> {
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<{ status: number; text: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`http_${res.status}: ${text.slice(0, 200)}`);
-    try { return JSON.parse(text); } catch { return { _raw: text }; }
+    const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    return { status: res.status, text: (await res.text()).trim() };
   } finally {
     clearTimeout(timer);
   }
 }
 
+function parseJson(text: string): any {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 export function listSites(): VoteSiteMeta[] {
   return [
     {
-      key: 'minecraft-serveur',
-      name: 'Minecraft-Serveur.com',
-      voteUrl: env.VOTE_MS_VOTE_URL ?? null,
-      enabled: Boolean(env.VOTE_MS_API_KEY && env.VOTE_MS_SERVER_ID),
-    },
-    {
-      key: 'serveurs-minecraft',
-      name: 'Serveurs-Minecraft.org',
-      voteUrl: env.VOTE_SM_VOTE_URL ?? null,
-      enabled: Boolean(env.VOTE_SM_SERVER_IP),
+      key: 'serveur-prive',
+      name: 'Serveur-Privé.net',
+      voteUrl: env.VOTE_SP_VOTE_URL ?? null,
+      pseudoParam: null,
+      enabled: Boolean(env.VOTE_SP_TOKEN),
     },
     {
       key: 'top-serveurs',
       name: 'Top-Serveurs.net',
       voteUrl: env.VOTE_TS_VOTE_URL ?? null,
-      enabled: Boolean(env.VOTE_TS_API_KEY),
+      pseudoParam: 'pseudo',
+      enabled: Boolean(env.VOTE_TS_TOKEN),
     },
     {
-      key: 'minecraft-mp',
-      name: 'Minecraft-MP.com',
-      voteUrl: env.VOTE_MMP_VOTE_URL ?? null,
-      enabled: Boolean(env.VOTE_MMP_API_KEY && env.VOTE_MMP_SERVER_ID),
+      key: 'serveursminecraft',
+      name: 'ServeursMinecraft.org',
+      voteUrl: env.VOTE_SMO_VOTE_URL ?? null,
+      pseudoParam: null,
+      enabled: Boolean(env.VOTE_SMO_SERVER_ID),
+    },
+    {
+      key: 'liste-serveurs-minecraft',
+      name: 'Liste-Serveurs-Minecraft.org',
+      voteUrl: env.VOTE_LSM_VOTE_URL ?? null,
+      pseudoParam: null,
+      enabled: Boolean(env.VOTE_LSM_SERVER_ID),
     },
   ];
 }
 
-// ───────── Adapters ─────────
-// Chaque adapter reçoit le payload brut du callback (body + query), récupère le pseudo,
-// puis re-vérifie auprès de l'API officielle du site que le vote a bien eu lieu
-// dans les dernières 24h. Ça empêche qu'un attaquant qui connaît l'URL callback
-// fabrique de faux votes.
-
-async function validateMinecraftServeur(input: VoteCallbackInput): Promise<VoteValidationResult> {
-  if (!env.VOTE_MS_API_KEY || !env.VOTE_MS_SERVER_ID) {
-    return { ok: false, reason: 'site_disabled' };
-  }
-  const pseudo = sanitizeMcUsername(input.payload.pseudo ?? input.payload.username ?? input.payload.player);
-  if (!pseudo) return { ok: false, reason: 'invalid_pseudo' };
-
-  try {
-    // https://api.minecraft-serveur.com/v2/?object=servers&element=votes
-    const url = `https://api.minecraft-serveur.com/v2/?object=servers&element=votes&key=${encodeURIComponent(env.VOTE_MS_API_KEY)}&pseudo=${encodeURIComponent(pseudo)}`;
-    const data = await fetchJsonWithTimeout(url);
-    // Documentation: retourne { status: 'ok', hasVoted: true } ou similaire.
-    // On accepte plusieurs formes possibles car l'API varie selon version.
-    const voted = Boolean(data?.hasVoted ?? data?.voted ?? (data?.status === 'ok' && data?.vote === 1));
-    if (!voted) return { ok: false, reason: 'vote_not_confirmed' };
-    return { ok: true, mcUsername: pseudo };
-  } catch (e) {
-    return { ok: false, reason: `api_error:${(e as Error).message}` };
-  }
+// Serveur-Privé : vote récent par pseudo (le site oblige à saisir un pseudo pour voter). 404 si pas de vote.
+async function checkServeurPrive({ mcUsername }: VoteCheckInput): Promise<VoteValidationResult> {
+  const url = `https://serveur-prive.net/api/v1/servers/${encodeURIComponent(env.VOTE_SP_TOKEN!)}/votes/${encodeURIComponent(mcUsername)}?type=username`;
+  const { text } = await fetchWithTimeout(url);
+  return parseJson(text)?.success === true ? { ok: true } : { ok: false, reason: 'not_voted' };
 }
 
-async function validateServeursMinecraft(input: VoteCallbackInput): Promise<VoteValidationResult> {
-  if (!env.VOTE_SM_SERVER_IP) {
-    return { ok: false, reason: 'site_disabled' };
-  }
-  const pseudo = sanitizeMcUsername(input.payload.pseudo ?? input.payload.username ?? input.payload.player);
-  if (!pseudo) return { ok: false, reason: 'invalid_pseudo' };
-
-  try {
-    // https://serveurs-minecraft.org/sm_api/hasVoted.php?ip=<ip>&user=<pseudo>
-    const url = `https://serveurs-minecraft.org/sm_api/hasVoted.php?ip=${encodeURIComponent(env.VOTE_SM_SERVER_IP)}&user=${encodeURIComponent(pseudo)}`;
-    const data = await fetchJsonWithTimeout(url);
-    // Retourne "1" ou 1 si voté dans les 24h, "0" sinon.
-    const raw = data?._raw ?? String(data);
-    const voted = raw === '1' || raw === 1 || raw?.trim?.() === '1';
-    if (!voted) return { ok: false, reason: 'vote_not_confirmed' };
-    return { ok: true, mcUsername: pseudo };
-  } catch (e) {
-    return { ok: false, reason: `api_error:${(e as Error).message}` };
-  }
+// Top-Serveurs : « claim » par pseudo, vote des 2 dernières heures. 1 = réclamable, 2 = déjà réclamé, 0 = introuvable.
+// Le claim marque le vote côté Top-Serveurs : il ne peut pas être récompensé deux fois.
+async function checkTopServeurs({ mcUsername }: VoteCheckInput): Promise<VoteValidationResult> {
+  const url = `https://api.top-serveurs.net/v1/votes/claim-username?server_token=${encodeURIComponent(env.VOTE_TS_TOKEN!)}&playername=${encodeURIComponent(mcUsername)}`;
+  const { text } = await fetchWithTimeout(url);
+  const claimed = parseJson(text)?.claimed;
+  if (claimed === 1) return { ok: true };
+  return { ok: false, reason: claimed === 2 ? 'already_claimed' : 'not_voted' };
 }
 
-async function validateTopServeurs(input: VoteCallbackInput): Promise<VoteValidationResult> {
-  if (!env.VOTE_TS_API_KEY) {
-    return { ok: false, reason: 'site_disabled' };
-  }
-  // Top-Serveurs.net envoie généralement le pseudo dans le body + une signature.
-  // On vérifie via leur API (votes récents).
-  const pseudo = sanitizeMcUsername(input.payload.username ?? input.payload.pseudo ?? input.payload.player);
-  if (!pseudo) return { ok: false, reason: 'invalid_pseudo' };
-
-  try {
-    const url = `https://api.top-serveurs.net/v1/servers/votes/username/${encodeURIComponent(pseudo)}`;
-    const data = await fetchJsonWithTimeout(url, {
-      headers: { Authorization: `Bearer ${env.VOTE_TS_API_KEY}` },
-    });
-    const voted = Boolean(data?.success && (data?.hasVoted ?? data?.data?.hasVoted));
-    if (!voted) return { ok: false, reason: 'vote_not_confirmed' };
-    return { ok: true, mcUsername: pseudo };
-  } catch (e) {
-    return { ok: false, reason: `api_error:${(e as Error).message}` };
-  }
+// ServeursMinecraft.org : par IP, « true » tant que l'IP peut encore voter, autre chose une fois qu'elle a voté.
+async function checkServeursMinecraft({ ip }: VoteCheckInput): Promise<VoteValidationResult> {
+  if (!ip) return { ok: false, reason: 'no_ip' };
+  const url = `https://www.serveursminecraft.org/sm_api/peutVoter.php?id=${encodeURIComponent(env.VOTE_SMO_SERVER_ID!)}&ip=${encodeURIComponent(ip)}`;
+  const { status, text } = await fetchWithTimeout(url);
+  // Une page d'erreur ne doit pas passer pour un vote
+  const answered = status === 200 && text !== '' && text.length < 64 && !text.includes('<');
+  return answered && text !== 'true' ? { ok: true } : { ok: false, reason: 'not_voted' };
 }
 
-async function validateMinecraftMp(input: VoteCallbackInput): Promise<VoteValidationResult> {
-  if (!env.VOTE_MMP_API_KEY || !env.VOTE_MMP_SERVER_ID) {
-    return { ok: false, reason: 'site_disabled' };
-  }
-  // Minecraft-MP : callback avec username + custom, vérification via API.
-  const pseudo = sanitizeMcUsername(input.payload.username ?? input.payload.pseudo ?? input.payload.player);
-  if (!pseudo) return { ok: false, reason: 'invalid_pseudo' };
-
-  try {
-    const url = `https://minecraft-mp.com/api/?object=votes&element=claim&key=${encodeURIComponent(env.VOTE_MMP_API_KEY)}&username=${encodeURIComponent(pseudo)}`;
-    const data = await fetchJsonWithTimeout(url);
-    // Retourne "1" si voté et claimable, "0" sinon.
-    const raw = data?._raw ?? String(data);
-    const voted = raw === '1' || raw === 1 || raw?.trim?.() === '1';
-    if (!voted) return { ok: false, reason: 'vote_not_confirmed' };
-    return { ok: true, mcUsername: pseudo };
-  } catch (e) {
-    return { ok: false, reason: `api_error:${(e as Error).message}` };
-  }
+// Liste-Serveurs-Minecraft.org : par IP, « 1 » si l'IP a voté dans les 5 dernières minutes.
+async function checkListeServeursMinecraft({ ip }: VoteCheckInput): Promise<VoteValidationResult> {
+  if (!ip) return { ok: false, reason: 'no_ip' };
+  const url = `https://api.liste-serveurs-minecraft.org/vote/vote_verification.php?server_id=${encodeURIComponent(env.VOTE_LSM_SERVER_ID!)}&ip=${encodeURIComponent(ip)}&duration=5`;
+  const { text } = await fetchWithTimeout(url);
+  return text === '1' ? { ok: true } : { ok: false, reason: 'not_voted' };
 }
 
-export interface VoteCallbackInput {
-  payload: Record<string, any>;
-  ip: string;
-}
-
-const VALIDATORS: Record<VoteSiteKey, (i: VoteCallbackInput) => Promise<VoteValidationResult>> = {
-  'minecraft-serveur': validateMinecraftServeur,
-  'serveurs-minecraft': validateServeursMinecraft,
-  'top-serveurs': validateTopServeurs,
-  'minecraft-mp': validateMinecraftMp,
+const CHECKERS: Record<VoteSiteKey, (i: VoteCheckInput) => Promise<VoteValidationResult>> = {
+  'serveur-prive': checkServeurPrive,
+  'top-serveurs': checkTopServeurs,
+  'serveursminecraft': checkServeursMinecraft,
+  'liste-serveurs-minecraft': checkListeServeursMinecraft,
 };
 
+// Sites vérifiés par l'IP du joueur : une même IP ne peut valoir qu'un vote par jour, quel que soit le pseudo.
+export const IP_CHECKED_SITES: ReadonlySet<VoteSiteKey> = new Set(['serveursminecraft', 'liste-serveurs-minecraft']);
+
 export function isKnownSite(key: string): key is VoteSiteKey {
-  return key in VALIDATORS;
+  return key in CHECKERS;
 }
 
-export async function validateVoteCallback(site: VoteSiteKey, input: VoteCallbackInput): Promise<VoteValidationResult> {
-  return VALIDATORS[site](input);
+export async function checkVote(site: VoteSiteKey, input: VoteCheckInput): Promise<VoteValidationResult> {
+  if (!listSites().find((s) => s.key === site)?.enabled) {
+    return { ok: false, reason: 'site_disabled' };
+  }
+  try {
+    return await CHECKERS[site](input);
+  } catch (e) {
+    return { ok: false, reason: `api_error:${(e as Error).message}` };
+  }
 }

@@ -1,14 +1,16 @@
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/authMiddleware.js';
-import { voteCallbackLimiter, voteReadLimiter } from '../middleware/rateLimitMiddleware.js';
+import { authenticateToken, optionalAuth } from '../middleware/authMiddleware.js';
+import { voteCheckLimiter, voteReadLimiter } from '../middleware/rateLimitMiddleware.js';
 import {
+  IP_CHECKED_SITES,
+  checkVote,
   isKnownSite,
   listSites,
-  validateVoteCallback,
 } from '../services/voteSiteAdapters.js';
 import {
   getMonthlyLeaderboard,
   getUserMonthlyVoteStats,
+  ipVotedToday,
   recordVoteAndReward,
 } from '../services/voteService.js';
 
@@ -43,42 +45,38 @@ voteRouter.get('/me/stats', voteReadLimiter, authenticateToken, async (req, res)
   }
 });
 
-// Callback appelé par le site de vote quand un joueur vote.
-// On accepte GET et POST pour matcher les conventions différentes.
-const handleCallback = async (req: any, res: any) => {
-  const siteParam = String(req.params.site || '');
-  if (!isKnownSite(siteParam)) {
+// « J'ai voté » : le joueur demande la vérification d'un site, le backend interroge l'API du site
+// (par pseudo ou par IP) puis compte le vote et met la récompense en file. Connecté, le pseudo est celui
+// du compte ; sinon le joueur le saisit (la récompense va de toute façon au pseudo qui a voté).
+voteRouter.post('/check/:site', voteCheckLimiter, optionalAuth, async (req, res) => {
+  const site = String(req.params.site || '');
+  if (!isKnownSite(site)) {
     return res.status(404).json({ error: 'Site inconnu' });
   }
-  const payload: Record<string, any> = {
-    ...(typeof req.query === 'object' ? req.query : {}),
-    ...(typeof req.body === 'object' && req.body ? req.body : {}),
-  };
-  const ip = (req.ip || req.socket?.remoteAddress || null) as string | null;
+  const user = (req as any).user as { pseudo?: string } | undefined;
+  const mcUsername = String(user?.pseudo ?? req.body?.pseudo ?? '').trim();
+  if (!/^[a-zA-Z0-9_]{2,32}$/.test(mcUsername)) {
+    return res.status(400).json({ error: 'Pseudo Minecraft invalide' });
+  }
+  // Derrière Cloudflare, req.ip est le pod cloudflared : l'IP du joueur est dans CF-Connecting-IP
+  const ip = req.get('cf-connecting-ip') || req.ip || '';
 
   try {
-    const validation = await validateVoteCallback(siteParam, { payload, ip: ip || '' });
-    if (!validation.ok || !validation.mcUsername) {
-      console.log(`[votes/callback] site=${siteParam} rejected: ${validation.reason ?? 'unknown'} (ip=${ip})`);
-      return res.status(400).json({ error: 'Vote non validé', reason: validation.reason });
+    if (IP_CHECKED_SITES.has(site) && await ipVotedToday(site, ip)) {
+      return res.json({ ok: false, reason: 'ip_already_used' });
     }
-
-    const result = await recordVoteAndReward({
-      siteName: siteParam,
-      mcUsername: validation.mcUsername,
-      ip,
-      rawPayload: payload,
-    });
-
-    if (!result.inserted && result.reason === 'already_voted_today') {
-      return res.status(200).json({ ok: true, duplicate: true });
+    const check = await checkVote(site, { mcUsername, ip });
+    if (!check.ok) {
+      console.log(`[votes/check] site=${site} user=${mcUsername} refusé : ${check.reason ?? 'inconnu'}`);
+      return res.json({ ok: false, reason: check.reason });
     }
-    return res.status(200).json({ ok: true, rconOk: result.rconOk, reason: result.reason });
+    const result = await recordVoteAndReward({ siteName: site, mcUsername, ip, rawPayload: { pseudo: mcUsername } });
+    if (!result.inserted) {
+      return res.json({ ok: false, reason: result.reason });
+    }
+    return res.json({ ok: true, rewarded: result.rconOk });
   } catch (error) {
-    console.error(`[votes/callback] site=${siteParam} error:`, error);
+    console.error(`[votes/check] site=${site} error:`, error);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
-};
-
-voteRouter.post('/callback/:site', voteCallbackLimiter, handleCallback);
-voteRouter.get('/callback/:site', voteCallbackLimiter, handleCallback);
+});

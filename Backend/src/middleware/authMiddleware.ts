@@ -32,6 +32,19 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
   }
 }
 
+// Comme authenticateToken, mais laisse passer sans compte (req.user reste vide si le token est absent ou invalide)
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (token && env.JWT_PUBLIC_KEY) {
+    try {
+      (req as any).user = jwt.verify(token, env.JWT_PUBLIC_KEY, { algorithms: ['RS256'] }) as JwtPayload;
+    } catch {
+      // token expiré ou invalide : on continue comme un visiteur
+    }
+  }
+  return next();
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const user = (req as any).user as JwtPayload | undefined;
   if (!user?.userId) {

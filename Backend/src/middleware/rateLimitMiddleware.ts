@@ -32,12 +32,13 @@ export const webhookLimiter = rateLimit({
   message: { error: 'Trop de webhooks reçus.' },
 });
 
-export const voteCallbackLimiter = rateLimit({
+// Chaque vérification interroge l'API d'un site de vote : on reste raisonnable par IP
+export const voteCheckLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Trop de callbacks de votes.' },
+  message: { error: 'Trop de vérifications de votes, réessaie dans une minute.' },
 });
 
 export const voteReadLimiter = rateLimit({
