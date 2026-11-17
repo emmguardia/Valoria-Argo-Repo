@@ -143,6 +143,67 @@ spec:
               name: valoria-secrets
               key: rcon-password
               optional: true
+        # Sites de vote : un site n'est actif que si ses clés sont dans valoria-secrets
+        - name: VOTE_MS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-ms-api-key
+              optional: true
+        - name: VOTE_MS_SERVER_ID
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-ms-server-id
+              optional: true
+        - name: VOTE_MS_VOTE_URL
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-ms-vote-url
+              optional: true
+        - name: VOTE_SM_SERVER_IP
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-sm-server-ip
+              optional: true
+        - name: VOTE_SM_VOTE_URL
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-sm-vote-url
+              optional: true
+        - name: VOTE_TS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-ts-api-key
+              optional: true
+        - name: VOTE_TS_VOTE_URL
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-ts-vote-url
+              optional: true
+        - name: VOTE_MMP_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-mmp-api-key
+              optional: true
+        - name: VOTE_MMP_SERVER_ID
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-mmp-server-id
+              optional: true
+        - name: VOTE_MMP_VOTE_URL
+          valueFrom:
+            secretKeyRef:
+              name: valoria-secrets
+              key: vote-mmp-vote-url
+              optional: true
         resources:
           {{- toYaml .Values.backend.resources | nindent 10 }}
         readinessProbe:
