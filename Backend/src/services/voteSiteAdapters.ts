@@ -66,7 +66,7 @@ export function listSites(): VoteSiteMeta[] {
       key: 'liste-serveurs-minecraft',
       name: 'Liste-Serveurs-Minecraft.org',
       voteUrl: env.VOTE_LSM_VOTE_URL ?? null,
-      pseudoParam: null,
+      pseudoParam: 'nickname',
       enabled: Boolean(env.VOTE_LSM_SERVER_ID),
     },
   ];
@@ -99,10 +99,10 @@ async function checkServeursMinecraft({ ip }: VoteCheckInput): Promise<VoteValid
   return answered && text !== 'true' ? { ok: true } : { ok: false, reason: 'not_voted' };
 }
 
-// Liste-Serveurs-Minecraft.org : par IP, « 1 » si l'IP a voté dans les 5 dernières minutes.
+// Liste-Serveurs-Minecraft.org : par IP, « 1 » si l'IP a voté dans les 3 dernières heures (délai entre deux votes).
 async function checkListeServeursMinecraft({ ip }: VoteCheckInput): Promise<VoteValidationResult> {
   if (!ip) return { ok: false, reason: 'no_ip' };
-  const url = `https://api.liste-serveurs-minecraft.org/vote/vote_verification.php?server_id=${encodeURIComponent(env.VOTE_LSM_SERVER_ID!)}&ip=${encodeURIComponent(ip)}&duration=5`;
+  const url = `https://api.liste-serveurs-minecraft.org/vote/vote_verification.php?server_id=${encodeURIComponent(env.VOTE_LSM_SERVER_ID!)}&ip=${encodeURIComponent(ip)}&duration=180`;
   const { text } = await fetchWithTimeout(url);
   return text === '1' ? { ok: true } : { ok: false, reason: 'not_voted' };
 }

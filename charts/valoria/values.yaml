@@ -63,9 +63,8 @@ votes:
   VOTE_TS_VOTE_URL: https://top-serveurs.net/minecraft/vote/valoria-6afcc999b41d2
   VOTE_SMO_SERVER_ID: "7830"
   VOTE_SMO_VOTE_URL: https://www.serveursminecraft.org/serveur/7830/
-  # Liste-Serveurs-Minecraft.org : fiche en attente de modération, à remplir une fois validée
-  VOTE_LSM_SERVER_ID: ""
-  VOTE_LSM_VOTE_URL: ""
+  VOTE_LSM_SERVER_ID: "209105"
+  VOTE_LSM_VOTE_URL: https://www.liste-serveurs-minecraft.org/vote/?idc=209105
 
 nginx:
   apiProxy:
