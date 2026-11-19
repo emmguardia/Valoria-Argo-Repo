@@ -94,6 +94,16 @@ async function initSchema(db: Pool) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
+  // Classements publics de la page Classement, envoyés par le serveur Minecraft une fois par heure (une seule ligne)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS leaderboards (
+      id TINYINT UNSIGNED NOT NULL,
+      data JSON NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
   // Votes vérifiés par l'IP du joueur : une IP ne vaut qu'un vote par site et par jour, même avec deux pseudos
   // envoyés en même temps (la contrainte tranche, pas seulement le contrôle préalable).
   // Un échec ici (doublons anciens) ne doit pas empêcher le site de démarrer : le contrôle applicatif reste en place.

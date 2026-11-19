@@ -25,7 +25,7 @@ export async function recordVoteAndReward(args: {
   try {
     await db.execute(
       `INSERT INTO votes (user_id, mc_username, site_name, callback_ip, raw_payload)
-       VALUES (?, ?, ?, ?, CAST(? AS JSON))`,
+       VALUES (?, ?, ?, ?, ?)`,
       [userId, args.mcUsername, args.siteName, args.ip, JSON.stringify(args.rawPayload ?? {})]
     );
   } catch (error: any) {

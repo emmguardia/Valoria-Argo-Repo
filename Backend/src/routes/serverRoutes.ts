@@ -6,6 +6,7 @@ import { env } from '../config/env.js';
 import { clientIp, limiter } from '../utils/http.js';
 import { applyAcks, claimCommands, isMcName, isMcUuid, recordHeartbeat } from '../services/serverQueueService.js';
 import { recordServerStats } from '../services/statsService.js';
+import { rankingsSchema, saveRankings } from '../services/leaderboardService.js';
 import { ShopError, balancesFor, catalogFor, linkAccount, purchaseProduct, userIdForUuid } from '../services/shopService.js';
 
 // API réservée au serveur Minecraft (plugin ValoriaCore), protégée par le jeton partagé VALORIA_SERVER_TOKEN.
@@ -54,6 +55,9 @@ const pollSchema = z.object({
     })).max(1000).optional(),
     snapshot: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
+  // Classements publics (page Classement du site), au plus une fois par heure ; vérifiés à part : un classement
+  // mal formé ne doit jamais bloquer les livraisons
+  rankings: z.unknown().optional(),
 });
 
 // Un passage noté par minute et par réplica, ou dès qu'il s'est passé quelque chose
@@ -63,10 +67,18 @@ let lastHeartbeat = 0;
 serverRouter.post('/poll', async (req, res) => {
   const parsed = pollSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Requête invalide' });
-  const { online, acks, pluginVersion, stats } = parsed.data;
+  const { online, acks, pluginVersion, stats, rankings } = parsed.data;
   if (stats) {
     // Les statistiques ne bloquent jamais les livraisons
     recordServerStats(stats).catch((error) => console.error('[server/poll] stats error:', error));
+  }
+  if (rankings !== undefined) {
+    const checked = rankingsSchema.safeParse(rankings);
+    if (checked.success) {
+      saveRankings(checked.data).catch((error) => console.error('[server/poll] classements error:', error));
+    } else {
+      console.warn('[server/poll] classements refusés :', checked.error.issues[0]?.message);
+    }
   }
   try {
     const acked = await applyAcks(acks);

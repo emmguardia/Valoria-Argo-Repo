@@ -3,7 +3,15 @@ import type { ComponentType, ReactNode } from 'react';
 import { Crown, Banknote, Briefcase, Target, Vote } from 'lucide-react';
 import SEO from '../components/SEO';
 
-type Rank = { rank: number; name: string; value: number };
+/** Une ligne : rang, nom, valeur principale, et une colonne en plus (membres, K/D, métiers). */
+type Rank = { rank: number; name: string; value: number; extra?: string };
+
+type Rankings = {
+  factions: { name: string; score: number; members: number }[];
+  kills: { name: string; kills: number; deaths: number }[];
+  metiers: { name: string; total: number; jobs: string[] }[];
+  updatedAt: string | null;
+};
 
 const RANK_STYLE: Record<number, string> = {
   1: 'bg-[#f59e0b] text-white',
@@ -12,8 +20,9 @@ const RANK_STYLE: Record<number, string> = {
 };
 
 /** Un classement : titre, colonne de valeur, lignes (ou message d'attente tant qu'il n'y a pas de données réelles). */
-function Board({ icon: Icon, title, valueLabel, rows, empty }: {
-  icon: ComponentType<{ className?: string }>; title: string; valueLabel: string; rows: Rank[] | null; empty: ReactNode;
+function Board({ icon: Icon, title, nameLabel = 'Joueur', valueLabel, extraLabel, rows, empty }: {
+  icon: ComponentType<{ className?: string }>; title: string; nameLabel?: string; valueLabel: string; extraLabel?: string;
+  rows: Rank[] | null; empty: ReactNode;
 }) {
   return (
     <div>
@@ -28,7 +37,8 @@ function Board({ icon: Icon, title, valueLabel, rows, empty }: {
               <thead>
                 <tr className="bg-[#1e3a5f] text-white">
                   <th className="px-6 py-4 text-left text-sm font-medium">#</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium">Joueur</th>
+                  <th className="px-6 py-4 text-left text-sm font-medium">{nameLabel}</th>
+                  {extraLabel && <th className="px-6 py-4 text-left text-sm font-medium">{extraLabel}</th>}
                   <th className="px-6 py-4 text-right text-sm font-medium">{valueLabel}</th>
                 </tr>
               </thead>
@@ -41,6 +51,7 @@ function Board({ icon: Icon, title, valueLabel, rows, empty }: {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-900">{r.name}</td>
+                    {extraLabel && <td className="px-6 py-4 text-gray-600">{r.extra}</td>}
                     <td className="px-6 py-4 text-right text-gray-600">{r.value.toLocaleString('fr-FR')}</td>
                   </tr>
                 ))}
@@ -74,8 +85,31 @@ export default function ClassementPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Factions, kills et métiers : pas encore remontés du serveur, aucun faux classement n'est affiché
-  const soon = 'Classement affiché dès l’ouverture de la saison.';
+  // Factions, kills et métiers : envoyés par le serveur Minecraft une fois par heure. null = chargement.
+  const [rankings, setRankings] = useState<Rankings | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/classements')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (!cancelled) setRankings(data ?? { factions: [], kills: [], metiers: [], updatedAt: null }); })
+      .catch(() => { if (!cancelled) setRankings({ factions: [], kills: [], metiers: [], updatedAt: null }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const top = <T,>(list: T[] | undefined, row: (item: T, rank: number) => Rank) =>
+    rankings === null ? null : (list ?? []).slice(0, 5).map((item, i) => row(item, i + 1));
+  const factions = top(rankings?.factions, (f, rank) => ({
+    rank, name: f.name, value: f.score, extra: `${f.members} membre${f.members > 1 ? 's' : ''}`,
+  }));
+  const kills = top(rankings?.kills, (k, rank) => ({
+    rank, name: k.name, value: k.kills, extra: `K/D ${(k.kills / Math.max(1, k.deaths)).toFixed(2)}`,
+  }));
+  const jobs = top(rankings?.metiers, (j, rank) => ({ rank, name: j.name, value: j.total, extra: j.jobs.join(', ') }));
+  const waiting = rankings === null ? 'Chargement…' : 'Pas encore de classement : il se met à jour toutes les heures.';
+  const updated = rankings?.updatedAt
+    ? new Date(rankings.updatedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+    : null;
 
   return (
     <div className="valoria-page-shell">
@@ -119,8 +153,9 @@ export default function ClassementPage() {
       <section className="valoria-page-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            <Board icon={Crown} title="Top Factions" valueLabel="Puissance" rows={null} empty={soon} />
-            <Board icon={Target} title="Top Kill" valueLabel="Kills" rows={null} empty={soon} />
+            <Board icon={Crown} title="Top Factions" nameLabel="Faction" valueLabel="Score de saison" extraLabel="Membres"
+              rows={factions} empty={waiting} />
+            <Board icon={Target} title="Top Kill de la saison" valueLabel="Kills" extraLabel="K/D" rows={kills} empty={waiting} />
             <Board
               icon={Vote}
               title="Top Vote du mois"
@@ -128,8 +163,10 @@ export default function ClassementPage() {
               rows={topVotes}
               empty={topVotes === null ? 'Chargement…' : 'Aucun vote ce mois-ci pour le moment : la première place est libre.'}
             />
-            <Board icon={Briefcase} title="Top Métier (tout confondu)" valueLabel="Niveau cumulé" rows={null} empty={soon} />
+            <Board icon={Briefcase} title="Top Métier (tout confondu)" valueLabel="Niveau cumulé" extraLabel="Meilleurs métiers"
+              rows={jobs} empty={waiting} />
           </div>
+          {updated && <p className="mt-8 text-center text-sm text-gray-500">Classements du serveur mis à jour le {updated} (toutes les heures).</p>}
         </div>
       </section>
     </div>
