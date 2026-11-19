@@ -20,6 +20,11 @@ data:
 
         client_max_body_size 50M;
 
+        # CSP : seule protection du jeton de session (gardé dans le navigateur) contre un script injecté. Les autres
+        # en-têtes de sécurité viennent du middleware Traefik « security-headers ». Hérité par « location / »
+        # (les blocs qui posent leurs propres add_header, comme les fichiers versionnés, ne l'ont pas : ce ne sont pas des pages).
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" always;
+
         {{- if .Values.nginx.apiProxy.enabled }}
         location /api/ {
             proxy_pass {{ .Values.nginx.apiProxy.upstream }};

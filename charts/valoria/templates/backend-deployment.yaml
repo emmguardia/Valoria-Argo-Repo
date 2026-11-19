@@ -85,6 +85,9 @@ spec:
             secretKeyRef:
               name: valoria-secrets
               key: jwt-private-key
+        # Émetteur des jetons de session : posé à la signature, exigé à la vérification
+        - name: JWT_ISSUER
+          value: "valoria"
         - name: JWT_PUBLIC_KEY
           valueFrom:
             secretKeyRef:
@@ -95,12 +98,6 @@ spec:
             secretKeyRef:
               name: valoria-secrets
               key: stripe-secret-key
-              optional: true
-        - name: STRIPE_PUBLISHABLE_KEY
-          valueFrom:
-            secretKeyRef:
-              name: valoria-secrets
-              key: stripe-publishable-key
               optional: true
         # Email-Service du homelab : vérification des adresses e-mail, envoyées depuis valoria@zenixweb.fr.
         # La clé signe les jetons d'accès à l'Email-Service (copie scellée de la sienne).
@@ -124,24 +121,6 @@ spec:
             secretKeyRef:
               name: valoria-secrets
               key: server-token
-              optional: true
-        - name: RCON_HOST
-          valueFrom:
-            secretKeyRef:
-              name: valoria-secrets
-              key: rcon-host
-              optional: true
-        - name: RCON_PORT
-          valueFrom:
-            secretKeyRef:
-              name: valoria-secrets
-              key: rcon-port
-              optional: true
-        - name: RCON_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: valoria-secrets
-              key: rcon-password
               optional: true
         # Sites de vote : jetons d'API dans valoria-secrets, pages de vote et identifiants publics dans values.yaml.
         # Un site sans jeton (ou sans identifiant) n'apparaît pas comme actif.

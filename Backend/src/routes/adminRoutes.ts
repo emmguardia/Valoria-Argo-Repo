@@ -149,7 +149,7 @@ adminRouter.post('/users/:id/ecus', authWriteLimiter, async (req, res) => {
     return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Champs invalides' });
   }
   const { delta, reason } = parsed.data;
-  const adminId = Number((req as any).user.userId);
+  const adminId = Number(req.user!.userId);
 
   const db = await getDbPool();
   const conn = await db.getConnection();
@@ -180,7 +180,7 @@ adminRouter.post('/users/:id/ecus', authWriteLimiter, async (req, res) => {
     console.log(`[admin/ecus] admin=${adminId} user=${id} delta=${delta} balance=${next} reason="${reason}"`);
     return res.json({ ok: true, balance: next, delta });
   } catch (error) {
-    try { await conn.rollback(); } catch {}
+    await conn.rollback().catch(() => { /* connexion déjà perdue */ });
     console.error('[admin/users/ecus POST] error:', error);
     return res.status(500).json({ error: 'Erreur serveur' });
   } finally {
@@ -429,26 +429,6 @@ adminRouter.get('/reward-jobs', authReadLimiter, async (req, res) => {
   }
 });
 
-// Remettre un job failed / dead en pending_claim pour permettre au joueur de reclaim.
-adminRouter.post('/reward-jobs/:id/reopen', authWriteLimiter, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Id invalide' });
-  try {
-    const db = await getDbPool();
-    await db.execute(
-      `UPDATE reward_delivery_jobs
-       SET status = 'pending_claim', daily_attempts = 0, daily_attempts_reset_at = NULL,
-           last_error = NULL, updated_at = NOW()
-       WHERE id = ?`,
-      [id]
-    );
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error('[admin/reward-jobs reopen] error:', error);
-    return res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
 // ═══════════════════════════════════════════════════════════════
 // AUDIT (lectures)
 // ═══════════════════════════════════════════════════════════════
@@ -562,7 +542,7 @@ adminRouter.post('/server-commands/:id/:action', authWriteLimiter, async (req, r
   const id = Number(req.params.id);
   const action = req.params.action;
   if (!Number.isInteger(id) || id <= 0 || !['retry', 'cancel'].includes(action)) return res.status(400).json({ error: 'Requête invalide' });
-  const adminId = Number((req as any).user.userId);
+  const adminId = Number(req.user!.userId);
   try {
     const db = await getDbPool();
     const [result] = action === 'retry'

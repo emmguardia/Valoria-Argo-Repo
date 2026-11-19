@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { RotateCw } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { adminApi, type AdminRewardJob } from '../../lib/adminApi';
 import {
   AdminPageHeader, AdminTable, AdminTableHead, AdminTableRow,
-  Badge, Empty, ErrorBanner, IconButton, Pagination, inputCls,
+  Badge, Empty, ErrorBanner, Pagination, inputCls,
 } from '../../components/admin/ui';
 
 const STATUSES = ['', 'pending_claim', 'completed', 'failed', 'dead'] as const;
@@ -35,9 +34,6 @@ export default function AdminRewardJobsPage() {
   const limit = 30;
 
   // Chargement fait dans l'effet lui-même (react-hooks/set-state-in-effect).
-  // `reload` le relance via `refreshKey` après une action admin.
-  const [refreshKey, setRefreshKey] = useState(0);
-  const reload = () => { setLoading(true); setError(null); setRefreshKey((k) => k + 1); };
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +46,7 @@ export default function AdminRewardJobsPage() {
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [token, page, status, refreshKey]);
-
-  const reopen = async (j: AdminRewardJob) => {
-    if (!window.confirm(`Rouvrir la livraison #${j.id} pour ${j.mcUsername} ?`)) return;
-    try { await adminApi.reopenRewardJob(token, j.id); reload(); }
-    catch (e) { window.alert(e instanceof Error ? e.message : 'Erreur'); }
-  };
+  }, [token, page, status]);
 
   const pageCount = Math.max(1, Math.ceil(total / limit));
 
@@ -64,7 +54,7 @@ export default function AdminRewardJobsPage() {
     <div>
       <AdminPageHeader
         title={`Livraisons (${total})`}
-        subtitle="Récompenses à livrer en jeu — claim manuel par le joueur (3 tentatives/jour)."
+        subtitle="Historique de l'ancien système de livraison (réclamation manuelle, retiré) : consultation seule."
         right={
           <select
             value={status}
@@ -89,7 +79,6 @@ export default function AdminRewardJobsPage() {
                 <th className="px-4 py-3">Statut</th>
                 <th className="px-4 py-3 text-center">Tentatives</th>
                 <th className="px-4 py-3">Dernière erreur</th>
-                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </AdminTableHead>
             <tbody>
@@ -105,16 +94,9 @@ export default function AdminRewardJobsPage() {
                   <td className="px-4 py-3 text-red-600 text-xs max-w-[12rem] truncate" title={j.lastError || ''}>
                     {j.lastError || '—'}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    {(j.status === 'failed' || j.status === 'dead') && (
-                      <IconButton tone="gold" title="Rouvrir" onClick={() => reopen(j)}>
-                        <RotateCw className="w-4 h-4" />
-                      </IconButton>
-                    )}
-                  </td>
                 </AdminTableRow>
               ))}
-              {items.length === 0 && <tr><td colSpan={9}><Empty message="Aucune livraison." /></td></tr>}
+              {items.length === 0 && <tr><td colSpan={8}><Empty message="Aucune livraison." /></td></tr>}
             </tbody>
           </AdminTable>
           <Pagination page={page} pageCount={pageCount} onChange={(p) => { setLoading(true); setError(null); setPage(p); }} />

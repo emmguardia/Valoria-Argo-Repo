@@ -15,7 +15,6 @@ const envSchema = z.object({
   JWT_PUBLIC_KEY: z.string().min(10).optional(),
   JWT_ISSUER: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().min(10).optional(),
-  STRIPE_PUBLISHABLE_KEY: z.string().min(10).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(10).optional(),
   // Email-Service du homelab (vérification des adresses) : URL interne au cluster et clé de signature de ses jetons
   EMAIL_SERVICE_URL: z.string().url().default('http://email-service.email-service.svc.cluster.local:8080'),
@@ -24,11 +23,6 @@ const envSchema = z.object({
   PUBLIC_SITE_URL: z.string().url().default('https://valoria.zenixweb.fr'),
   // Jeton partagé avec le plugin du serveur Minecraft : il protège /api/server (le serveur vient chercher ses commandes).
   VALORIA_SERVER_TOKEN: z.string().min(32).optional(),
-  RCON_HOST: z.string().min(1).optional(),
-  RCON_PORT: z.coerce.number().int().positive().optional(),
-  RCON_PASSWORD: z.string().min(1).optional(),
-  /** Délai max (ms) pour connexion + réponses RCON (inventaire volumineux). Défaut rcon-client: 2000 — trop court. */
-  RCON_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
   // Sites de vote : jetons d'API (secrets) et identifiants publics des fiches
   VOTE_SP_TOKEN: z.string().optional(),

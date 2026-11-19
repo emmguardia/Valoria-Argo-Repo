@@ -139,6 +139,10 @@ jobs:
         working-directory: Backend
         run: pnpm typecheck
 
+      - name: Backend – lint
+        working-directory: Backend
+        run: pnpm lint
+
       - name: Backend – build
         working-directory: Backend
         run: pnpm run build

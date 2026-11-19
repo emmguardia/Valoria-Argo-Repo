@@ -10,6 +10,8 @@ export default function ProfilePage() {
   const { isLoggedIn, ecus, profile, token, updateProfile, deleteAccount } = useUser();
   const [resend, setResend] = useState<{ busy: boolean; text: string | null }>({ busy: false, text: null });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteState, setDeleteState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [editPseudo, setEditPseudo] = useState(profile?.pseudo ?? '');
   const [editEmail, setEditEmail] = useState(profile?.email ?? '');
   const [isEditing, setIsEditing] = useState(false);
@@ -35,14 +37,20 @@ export default function ProfilePage() {
   };
 
   const handleSaveProfile = () => {
-    updateProfile({ pseudo: editPseudo.trim(), email: editEmail.trim() });
+    // Compte lié : le pseudo est celui du jeu, il n'est pas envoyé
+    updateProfile({ pseudo: profile?.linked ? undefined : editPseudo.trim(), email: editEmail.trim() });
     setIsEditing(false);
   };
 
-  const handleDeleteAccount = () => {
-    deleteAccount();
-    setShowDeleteConfirm(false);
-    navigate('/');
+  // La session ne se ferme que si le serveur a bien supprimé le compte
+  const handleDeleteAccount = async () => {
+    setDeleteState({ busy: true, error: null });
+    try {
+      await deleteAccount(deletePassword);
+      navigate('/');
+    } catch (err) {
+      setDeleteState({ busy: false, error: err instanceof Error ? err.message : 'Suppression impossible' });
+    }
   };
 
 
@@ -118,8 +126,16 @@ export default function ProfilePage() {
                     value={editPseudo}
                     onChange={(e) => setEditPseudo(e.target.value)}
                     placeholder="TonPseudo"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none"
+                    maxLength={16}
+                    disabled={profile?.linked}
+                    aria-describedby={profile?.linked ? 'profile-pseudo-lie' : undefined}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none disabled:bg-gray-100 disabled:text-gray-500"
                   />
+                  {profile?.linked && (
+                    <p id="profile-pseudo-lie" className="mt-1.5 text-sm text-gray-500">
+                      Compte lié au jeu : ton pseudo est celui de Minecraft et se met à jour tout seul.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="profile-email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -208,11 +224,24 @@ export default function ProfilePage() {
             {showDeleteConfirm ? (
               <div className="p-4 bg-red-50 rounded-xl border border-red-200">
                 <p className="font-medium text-red-800 mb-4">Es-tu sûr de vouloir supprimer ton compte ?</p>
+                <label htmlFor="delete-password" className="block text-sm font-medium text-red-800 mb-2">
+                  Ton mot de passe, pour confirmer
+                </label>
+                <input
+                  id="delete-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="mb-4 w-full px-4 py-3 border border-red-200 rounded-lg bg-white focus:ring-2 focus:ring-red-400 focus:border-transparent outline-none"
+                />
+                {deleteState.error && <p role="alert" className="mb-4 text-sm font-semibold text-red-700">{deleteState.error}</p>}
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={handleDeleteAccount}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+                    disabled={!deletePassword || deleteState.busy}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-60"
                   >
                     <Trash2 className="w-5 h-5" />
                     Oui, supprimer

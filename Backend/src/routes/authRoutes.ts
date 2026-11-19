@@ -1,30 +1,16 @@
 import { Router } from 'express';
+import type { RowDataPacket } from 'mysql2/promise';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db/mysql.js';
-import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { authReadLimiter, authWriteLimiter } from '../middleware/rateLimitMiddleware.js';
 import { hashToken, RESEND_SECONDS, sendVerificationEmail } from '../services/emailVerification.js';
+import { jwtConfigured, signToken } from '../services/jwt.js';
+import { USER_COLUMNS, userJson } from '../services/users.js';
+import type { UserRow } from '../services/users.js';
 
 const authRouter = Router();
-
-function formatUnknownError(err: unknown) {
-  if (err instanceof Error) {
-    return { name: err.name, message: err.message, code: (err as any).code };
-  }
-  if (typeof err === 'string') return { message: err };
-  if (typeof err === 'object' && err) {
-    const anyErr = err as any;
-    return {
-      name: anyErr.name,
-      message: anyErr.message,
-      code: anyErr.code,
-    };
-  }
-  return { message: 'Erreur serveur' };
-}
 
 function normalizePseudo(raw: string) {
   return raw.trim();
@@ -43,12 +29,13 @@ function validatePassword(password: string) {
   );
 }
 
+// Même règle qu'un pseudo Minecraft : le pseudo du compte est celui du joueur en jeu
 const pseudoSchema = z
   .string()
   .trim()
   .min(2)
-  .max(32)
-  .regex(/^[a-zA-Z0-9_]+$/);
+  .max(16)
+  .regex(/^[a-zA-Z0-9_]+$/, 'Pseudo Minecraft invalide (lettres, chiffres et _ uniquement)');
 
 const emailSchema = z.string().trim().email();
 
@@ -67,14 +54,10 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   pseudo: pseudoSchema.optional(),
   email: emailSchema.optional().transform((v) => (v ? normalizeEmail(v) : v)),
-  password: passwordSchema,
+  // Pas la règle de complexité de l'inscription : un ancien mot de passe reste valable si la règle change
+  password: z.string().min(1).max(128),
   rememberMe: z.boolean().optional().default(false)
 });
-
-function requireJwtPrivateKey() {
-  if (!env.JWT_PRIVATE_KEY) throw new Error('JWT_PRIVATE_KEY non configurée');
-  return env.JWT_PRIVATE_KEY;
-}
 
 authRouter.post('/register', authWriteLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
@@ -83,7 +66,7 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
   }
 
   try {
-    if (!env.JWT_PRIVATE_KEY || !env.JWT_PUBLIC_KEY) {
+    if (!jwtConfigured()) {
       return res.status(500).json({ error: 'JWT non configuré côté serveur' });
     }
 
@@ -92,7 +75,9 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
 
     const [existingPseudo] = await db.execute('SELECT id FROM users WHERE pseudo = ? LIMIT 1', [pseudo]);
     if (Array.isArray(existingPseudo) && existingPseudo.length > 0) {
-      return res.status(409).json({ error: 'Pseudo déjà utilisé' });
+      return res.status(409).json({
+        error: 'Pseudo déjà pris sur le site. Si c\'est ton pseudo Minecraft, inscris-toi avec un autre pseudo puis tape /lier en jeu : ton pseudo te sera rendu.'
+      });
     }
 
     const [existingEmail] = await db.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
@@ -115,17 +100,7 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
     // Lien de vérification de l'adresse (l'échec de l'envoi ne bloque pas l'inscription : renvoi possible du profil)
     const mailSent = await sendVerificationEmail(db, { id: insertedId, pseudo, email });
 
-    const token = jwt.sign(
-      { userId: insertedId, pseudo, email, role: 'user' },
-      requireJwtPrivateKey(),
-      (() => {
-        const options: jwt.SignOptions = { algorithm: 'RS256', expiresIn: '7d' };
-        if (typeof env.JWT_ISSUER === 'string' && env.JWT_ISSUER.trim().length > 0) {
-          options.issuer = env.JWT_ISSUER.trim();
-        }
-        return options;
-      })()
-    );
+    const token = signToken({ userId: insertedId, pseudo, email, role: 'user' }, '7d');
 
     return res.status(201).json({
       message: 'Inscription réussie',
@@ -143,8 +118,7 @@ authRouter.post('/register', authWriteLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error('[auth/register] error:', err);
-    const details = formatUnknownError(err);
-    return res.status(500).json({ error: 'Erreur serveur', details });
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
@@ -163,29 +137,17 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Pseudo ou email requis' });
     }
 
-    if (!env.JWT_PRIVATE_KEY || !env.JWT_PUBLIC_KEY) {
+    if (!jwtConfigured()) {
       return res.status(500).json({ error: 'JWT non configuré côté serveur' });
     }
 
     const db = await getDbPool();
 
-    let rows: unknown;
-    if (identifierPseudo) {
-      const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, email_verified_at, banned_at, banned_reason, created_at, last_login FROM users WHERE pseudo = ? LIMIT 1',
-        [identifierPseudo]
-      );
-      rows = result[0];
-    } else {
-      const emailValue = identifierEmail!;
-      const result = await db.execute(
-        'SELECT id, pseudo, email, password_hash, ecus, role, mc_uuid, email_verified_at, banned_at, banned_reason, created_at, last_login FROM users WHERE email = ? LIMIT 1',
-        [emailValue]
-      );
-      rows = result[0];
-    }
-
-    const user = Array.isArray(rows) ? (rows[0] as any) : null;
+    const [rows] = await db.execute<UserRow[]>(
+      `SELECT ${USER_COLUMNS}, password_hash, banned_reason FROM users WHERE ${identifierPseudo ? 'pseudo' : 'email'} = ? LIMIT 1`,
+      [identifierPseudo ?? identifierEmail ?? '']
+    );
+    const user = rows[0];
     if (!user) {
       return res.status(401).json({ error: 'Identifiants invalides' });
     }
@@ -204,76 +166,25 @@ authRouter.post('/login', authWriteLimiter, async (req, res) => {
 
     await db.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
 
-    const token = jwt.sign(
-      { userId: String(user.id), pseudo: user.pseudo, email: user.email, role: user.role || 'user' },
-      requireJwtPrivateKey(),
-      (() => {
-        const options: jwt.SignOptions = {
-          algorithm: 'RS256',
-          expiresIn: rememberMe ? '30d' : '1d'
-        };
-        if (typeof env.JWT_ISSUER === 'string' && env.JWT_ISSUER.trim().length > 0) {
-          options.issuer = env.JWT_ISSUER.trim();
-        }
-        return options;
-      })()
-    );
+    const json = userJson(user);
+    const token = signToken({ userId: json.id, pseudo: json.pseudo, email: json.email, role: json.role }, rememberMe ? '30d' : '1d');
 
-    return res.json({
-      message: 'Connexion réussie',
-      token,
-      user: {
-        id: String(user.id),
-        pseudo: user.pseudo,
-        email: user.email,
-        ecus: user.ecus ?? 0,
-        role: user.role || 'user',
-        linked: Boolean(user.mc_uuid),
-        emailVerified: Boolean(user.email_verified_at),
-        createdAt: user.created_at,
-        lastLogin: user.last_login
-      }
-    });
+    return res.json({ message: 'Connexion réussie', token, user: json });
   } catch (err) {
     console.error('[auth/login] error:', err);
-    const details = formatUnknownError(err);
-    return res.status(500).json({ error: 'Erreur serveur', details });
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
 authRouter.get('/me', authReadLimiter, authenticateToken, async (req, res) => {
   try {
-    const userId = (req as any).user?.userId as string | undefined;
-    if (!userId) return res.status(401).json({ error: 'Token invalide' });
-
     const db = await getDbPool();
-    const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, role, mc_uuid, email_verified_at, banned_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
-      [userId]
-    );
-    const user = Array.isArray(rows) ? (rows[0] as any) : null;
-    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
-
-    if (user.banned_at) {
-      return res.status(403).json({ error: 'Compte suspendu' });
-    }
-
-    return res.json({
-      id: String(user.id),
-      pseudo: user.pseudo,
-      email: user.email,
-      ecus: user.ecus ?? 0,
-      role: user.role || 'user',
-      // Compte Minecraft lié (/lier) : sinon le site invite à le faire (pastille sur le profil)
-      linked: Boolean(user.mc_uuid),
-      emailVerified: Boolean(user.email_verified_at),
-      createdAt: user.created_at,
-      lastLogin: user.last_login
-    });
+    const [rows] = await db.execute<UserRow[]>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ? LIMIT 1`, [req.user!.userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    return res.json(userJson(rows[0]));
   } catch (err) {
     console.error('[auth/me GET] error:', err);
-    const details = formatUnknownError(err);
-    return res.status(500).json({ error: 'Erreur serveur', details });
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
@@ -304,8 +215,7 @@ authRouter.post('/verify-email', authWriteLimiter, async (req, res) => {
 // Renvoyer le lien (profil), au plus une fois par minute
 authRouter.post('/resend-verification', authWriteLimiter, authenticateToken, async (req, res) => {
   try {
-    const userId = (req as any).user?.userId as string | undefined;
-    if (!userId) return res.status(401).json({ error: 'Token invalide' });
+    const userId = req.user!.userId;
     const db = await getDbPool();
     const [rows] = await db.execute(
       `SELECT id, pseudo, email, email_verified_at, TIMESTAMPDIFF(SECOND, email_verify_sent_at, NOW()) AS since
@@ -336,96 +246,69 @@ authRouter.put('/me', authWriteLimiter, authenticateToken, async (req, res) => {
     .safeParse(req.body);
 
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Champs invalides' });
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Champs invalides' });
   }
 
   try {
-    const userId = (req as any).user?.userId as string | undefined;
-    if (!userId) return res.status(401).json({ error: 'Token invalide' });
-
-    const { pseudo, email } = parsed.data;
+    const { userId, linked } = req.user!;
+    const pseudo = parsed.data.pseudo ? normalizePseudo(parsed.data.pseudo) : undefined;
+    const email = parsed.data.email ? normalizeEmail(parsed.data.email) : undefined;
     const db = await getDbPool();
+    const [currentRows] = await db.execute<UserRow[]>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ? LIMIT 1`, [userId]);
+    const current = currentRows[0];
+    if (!current) return res.status(404).json({ error: 'Utilisateur non trouvé' });
 
-    const updateData: { pseudo?: string; email?: string } = {};
-    if (pseudo) updateData.pseudo = normalizePseudo(pseudo);
-    if (email) updateData.email = normalizeEmail(email);
+    const pseudoChanged = pseudo !== undefined && pseudo !== current.pseudo;
+    const emailChanged = email !== undefined && email !== current.email;
+    if (!pseudoChanged && !emailChanged) return res.json(userJson(current));
 
-    if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ error: 'Aucune donnée à mettre à jour' });
+    // Compte lié : le pseudo est celui du joueur en jeu, il suit le jeu (mis à jour au /lier), pas le site
+    if (pseudoChanged && linked) {
+      return res.status(409).json({ error: 'Ton compte est lié au jeu : ton pseudo est celui de Minecraft et ne se change pas ici.' });
+    }
+    if (pseudoChanged) {
+      const [rows] = await db.execute<RowDataPacket[]>('SELECT id FROM users WHERE pseudo = ? AND id <> ? LIMIT 1', [pseudo, userId]);
+      if (rows.length > 0) return res.status(409).json({ error: 'Pseudo déjà utilisé' });
+    }
+    if (emailChanged) {
+      const [rows] = await db.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1', [email, userId]);
+      if (rows.length > 0) return res.status(409).json({ error: 'Email déjà utilisé' });
     }
 
-    if (updateData.pseudo) {
-      const [rows] = await db.execute('SELECT id FROM users WHERE pseudo = ? AND id <> ? LIMIT 1', [
-        updateData.pseudo,
-        userId
-      ]);
-      if (Array.isArray(rows) && rows.length > 0) {
-        return res.status(409).json({ error: 'Pseudo déjà utilisé' });
-      }
-    }
-
-    if (updateData.email) {
-      const [rows] = await db.execute('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1', [updateData.email, userId]);
-      if (Array.isArray(rows) && rows.length > 0) {
-        return res.status(409).json({ error: 'Email déjà utilisé' });
-      }
-    }
-
-    if (updateData.pseudo && updateData.email) {
-      await db.execute('UPDATE users SET pseudo = ?, email = ? WHERE id = ?', [updateData.pseudo, updateData.email, userId]);
-    } else if (updateData.pseudo) {
-      await db.execute('UPDATE users SET pseudo = ? WHERE id = ?', [updateData.pseudo, userId]);
-    } else if (updateData.email) {
-      await db.execute('UPDATE users SET email = ? WHERE id = ?', [updateData.email, userId]);
-    }
-    // Nouvelle adresse : elle doit être confirmée à son tour
-    if (updateData.email) {
-      const [current] = await db.execute('SELECT pseudo FROM users WHERE id = ? LIMIT 1', [userId]);
-      await db.execute('UPDATE users SET email_verified_at = NULL WHERE id = ?', [userId]);
-      const pseudoNow = Array.isArray(current) && current[0] ? String((current[0] as any).pseudo) : '';
-      await sendVerificationEmail(db, { id: userId, pseudo: pseudoNow, email: updateData.email });
-    }
-
-    const [rows] = await db.execute(
-      'SELECT id, pseudo, email, ecus, role, mc_uuid, email_verified_at, created_at, last_login FROM users WHERE id = ? LIMIT 1',
-      [userId]
+    await db.execute(
+      `UPDATE users SET pseudo = ?, email = ?${emailChanged ? ', email_verified_at = NULL' : ''} WHERE id = ?`,
+      [pseudoChanged ? pseudo : current.pseudo, emailChanged ? email : current.email, userId]
     );
-    const user = Array.isArray(rows) ? (rows[0] as any) : null;
-    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    // Nouvelle adresse : elle doit être confirmée à son tour
+    if (emailChanged) {
+      await sendVerificationEmail(db, { id: userId, pseudo: pseudoChanged ? pseudo! : current.pseudo, email: email! });
+    }
 
-    return res.json({
-      id: String(user.id),
-      pseudo: user.pseudo,
-      email: user.email,
-      ecus: user.ecus ?? 0,
-      role: user.role || 'user',
-      // Compte Minecraft lié (/lier) : sinon le site invite à le faire (pastille sur le profil)
-      linked: Boolean(user.mc_uuid),
-      emailVerified: Boolean(user.email_verified_at),
-      createdAt: user.created_at,
-      lastLogin: user.last_login
-    });
+    const [rows] = await db.execute<UserRow[]>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ? LIMIT 1`, [userId]);
+    return res.json(userJson(rows[0]!));
   } catch (err) {
     console.error('[auth/me PUT] error:', err);
-    const details = formatUnknownError(err);
-    return res.status(500).json({ error: 'Erreur serveur', details });
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
+// Suppression du compte : le mot de passe est redemandé (un jeton volé ne suffit pas)
 authRouter.delete('/me', authWriteLimiter, authenticateToken, async (req, res) => {
+  const parsed = z.object({ password: z.string().min(1).max(128) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Mot de passe requis' });
   try {
-    const userId = (req as any).user?.userId as string | undefined;
-    if (!userId) return res.status(401).json({ error: 'Token invalide' });
-
     const db = await getDbPool();
-    await db.execute('DELETE FROM users WHERE id = ?', [userId]);
+    const [rows] = await db.execute<RowDataPacket[]>('SELECT password_hash FROM users WHERE id = ? LIMIT 1', [req.user!.userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    if (!(await bcrypt.compare(parsed.data.password, String(rows[0].password_hash)))) {
+      return res.status(400).json({ error: 'Mot de passe incorrect' });
+    }
+    await db.execute('DELETE FROM users WHERE id = ?', [req.user!.userId]);
     return res.json({ message: 'Compte supprimé' });
   } catch (err) {
     console.error('[auth/me DELETE] error:', err);
-    const details = formatUnknownError(err);
-    return res.status(500).json({ error: 'Erreur serveur', details });
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
 export { authRouter };
-

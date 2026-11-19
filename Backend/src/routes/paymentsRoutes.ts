@@ -1,11 +1,9 @@
 import { Router } from 'express';
-import type { Request } from 'express';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { getDbPool } from '../db/mysql.js';
-import { claimReward, listPendingRewardsForUser } from '../services/rewardDeliveryService.js';
 import { writeLedger } from '../services/shopService.js';
 import { paymentsLimiter, webhookLimiter } from '../middleware/rateLimitMiddleware.js';
 
@@ -38,18 +36,11 @@ const ECUS_REWARD_IDS: Record<50 | 150 | 350 | 750 | 1650, string> = {
 };
 const STRIPE_CURRENCY = 'eur';
 
-function getStripeClient() {
-  if (!env.STRIPE_SECRET_KEY) return null;
-  return new Stripe(env.STRIPE_SECRET_KEY);
-}
+// Un seul client Stripe pour tout le processus
+const stripeClient = env.STRIPE_SECRET_KEY ? new Stripe(env.STRIPE_SECRET_KEY) : null;
 
-function getFrontendUrl(req: Request) {
-  const origin = req.get('origin');
-  if (typeof origin === 'string' && origin.startsWith('http')) {
-    return origin;
-  }
-  return 'https://valoria.zenixweb.fr';
-}
+// Adresse de retour après paiement : celle du site, jamais déduite de la requête (en-tête Origin)
+const SITE_URL = env.PUBLIC_SITE_URL.replace(/\/$/, '');
 
 paymentsRouter.get('/status', paymentsLimiter, (_req, res) => {
   const enabled = Boolean(env.STRIPE_SECRET_KEY);
@@ -70,16 +61,13 @@ paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateTok
     });
   }
 
-  const stripe = getStripeClient();
+  const stripe = stripeClient;
   if (!stripe) {
     return res.status(503).json({ error: 'Stripe non configuré côté serveur' });
   }
 
-  const user = (req as any).user as { userId?: string; pseudo?: string; email?: string } | undefined;
-  if (!user?.userId) {
-    return res.status(401).json({ error: 'Token invalide' });
-  }
-  if (!user.pseudo || !/^[a-zA-Z0-9_]{2,32}$/.test(user.pseudo)) {
+  const user = req.user!;
+  if (!/^[a-zA-Z0-9_]{2,16}$/.test(user.pseudo)) {
     return res.status(400).json({ error: 'Pseudo Minecraft invalide' });
   }
 
@@ -94,10 +82,9 @@ paymentsRouter.post('/create-checkout-session', paymentsLimiter, authenticateTok
   const { ecus } = parsed.data;
   const amount = ECUS_PRICING_CENTS[ecus];
   const rewardId = ECUS_REWARD_IDS[ecus];
-  const frontendUrl = getFrontendUrl(req);
   // Retour sur la boutique, qui valide le paiement (confirm-checkout-session) et affiche le nouveau solde
-  const successUrl = `${frontendUrl}/boutique?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${frontendUrl}/boutique?checkout=cancel`;
+  const successUrl = `${SITE_URL}/boutique?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${SITE_URL}/boutique?checkout=cancel`;
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -199,16 +186,12 @@ paymentsRouter.post('/confirm-checkout-session', paymentsLimiter, authenticateTo
     return res.status(400).json({ error: 'Session Stripe invalide' });
   }
 
-  if (!env.STRIPE_SECRET_KEY) {
+  const stripe = stripeClient;
+  if (!stripe) {
     return res.status(503).json({ error: 'Stripe non configuré côté serveur' });
   }
 
-  const user = (req as any).user as { userId?: string } | undefined;
-  if (!user?.userId) {
-    return res.status(401).json({ error: 'Token invalide' });
-  }
-
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+  const user = req.user!;
   let session: Stripe.Checkout.Session;
   try {
     session = await stripe.checkout.sessions.retrieve(parsed.data.sessionId);
@@ -234,8 +217,63 @@ paymentsRouter.post('/confirm-checkout-session', paymentsLimiter, authenticateTo
   }
 });
 
+/**
+ * Paiement repris par Stripe (remboursement, litige) : les Écus correspondants sont retirés du compte, au prorata de la
+ * somme remboursée. Le solde peut passer en négatif (Écus déjà dépensés) : le joueur ne peut plus rien acheter tant
+ * qu'il n'est pas revenu à zéro. Rejouer l'événement ne retire rien de plus.
+ */
+async function reverseSession(sessionId: string, share: number, motif: string) {
+  const db = await getDbPool();
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [payments] = await conn.execute(
+      'SELECT user_id, ecus_amount FROM stripe_ecus_payments WHERE stripe_session_id = ? LIMIT 1', [sessionId]);
+    const payment = Array.isArray(payments) ? (payments[0] as any) : null;
+    if (!payment) {
+      await conn.rollback();
+      console.warn(JSON.stringify({ evt: 'boutique', etape: 'reprise-sans-credit', session: sessionId, motif }));
+      return;
+    }
+    const userId = Number(payment.user_id);
+    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+    const [taken] = await conn.execute(
+      `SELECT COALESCE(-SUM(delta), 0) AS taken FROM ecus_ledger WHERE ref_type = 'stripe_reversal' AND ref_id = ?`, [sessionId]);
+    const target = Math.round(Number(payment.ecus_amount) * Math.min(1, Math.max(0, share)));
+    const amount = target - Number((taken as any[])[0]?.taken ?? 0);
+    if (amount <= 0) {
+      await conn.rollback();
+      return;
+    }
+    await conn.execute('UPDATE users SET ecus = ecus - ? WHERE id = ?', [amount, userId]);
+    const [rows] = await conn.execute('SELECT ecus FROM users WHERE id = ?', [userId]);
+    const balance = Number((rows as any[])[0]?.ecus ?? 0);
+    await writeLedger(conn, {
+      userId, delta: -amount, balanceAfter: balance, reason: 'reprise_stripe', origin: 'stripe',
+      refType: 'stripe_reversal', refId: sessionId, detail: motif,
+    });
+    await conn.commit();
+    console.log(JSON.stringify({ evt: 'boutique', etape: 'reprise-stripe', userId, ecus: -amount, solde: balance,
+      session: sessionId, motif, ts: new Date().toISOString() }));
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+/** Session Checkout d'un paiement (les remboursements et litiges ne donnent que le paiement). */
+async function sessionIdForPaymentIntent(stripe: Stripe, paymentIntent: string | Stripe.PaymentIntent | null): Promise<string | null> {
+  const id = typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id;
+  if (!id) return null;
+  const sessions = await stripe.checkout.sessions.list({ payment_intent: id, limit: 1 });
+  return sessions.data[0]?.id ?? null;
+}
+
 paymentsRouter.post('/webhooks/stripe', webhookLimiter, async (req, res) => {
-  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
+  const stripe = stripeClient;
+  if (!stripe || !env.STRIPE_WEBHOOK_SECRET) {
     return res.status(204).send();
   }
 
@@ -244,7 +282,6 @@ paymentsRouter.post('/webhooks/stripe', webhookLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Signature Stripe manquante' });
   }
 
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, env.STRIPE_WEBHOOK_SECRET);
@@ -253,59 +290,35 @@ paymentsRouter.post('/webhooks/stripe', webhookLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Signature webhook invalide' });
   }
 
-  if (event.type !== 'checkout.session.completed') {
-    return res.status(200).json({ ok: true, ignored: true });
-  }
-
-  const session = event.data.object as Stripe.Checkout.Session;
   try {
-    await persistPaidSession(session);
+    switch (event.type) {
+      // Paiement immédiat (carte) : « completed » arrive déjà payé. Paiement différé (prélèvement) : « completed »
+      // arrive avant l'argent, les Écus attendent « async_payment_succeeded ».
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
+        const session = event.data.object;
+        if (session.payment_status === 'paid') await persistPaidSession(session);
+        break;
+      }
+      case 'charge.refunded': {
+        const charge = event.data.object;
+        const sessionId = await sessionIdForPaymentIntent(stripe, charge.payment_intent);
+        if (sessionId && charge.amount > 0) await reverseSession(sessionId, charge.amount_refunded / charge.amount, 'remboursement');
+        break;
+      }
+      case 'charge.dispute.created': {
+        const dispute = event.data.object;
+        const sessionId = await sessionIdForPaymentIntent(stripe, dispute.payment_intent);
+        // Litige gagné ensuite : les Écus se recréditent à la main depuis l'admin
+        if (sessionId) await reverseSession(sessionId, 1, 'litige');
+        break;
+      }
+      default:
+        return res.status(200).json({ ok: true, ignored: true });
+    }
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error('[payments/stripe-webhook] processing error:', error);
+    console.error(`[payments/stripe-webhook] ${event.type} processing error:`, error);
     return res.status(500).json({ error: 'Erreur serveur webhook Stripe' });
-  }
-});
-
-paymentsRouter.get('/rewards/pending', paymentsLimiter, authenticateToken, async (req, res) => {
-  const user = (req as any).user as { userId?: string } | undefined;
-  if (!user?.userId) return res.status(401).json({ error: 'Token invalide' });
-
-  try {
-    const items = await listPendingRewardsForUser(String(user.userId));
-    return res.status(200).json({ items });
-  } catch (error) {
-    console.error('[payments/rewards/pending] error:', error);
-    return res.status(500).json({ error: 'Erreur récupération récompenses' });
-  }
-});
-
-const claimParamsSchema = z.object({ id: z.coerce.number().int().positive() });
-
-paymentsRouter.post('/rewards/:id/claim', paymentsLimiter, authenticateToken, async (req, res) => {
-  const user = (req as any).user as { userId?: string } | undefined;
-  if (!user?.userId) return res.status(401).json({ error: 'Token invalide' });
-
-  const parsed = claimParamsSchema.safeParse(req.params);
-  if (!parsed.success) return res.status(400).json({ error: 'Id récompense invalide' });
-
-  try {
-    const result = await claimReward(String(user.userId), parsed.data.id);
-    if (result.ok) return res.status(200).json({ ok: true, status: 'delivered' });
-    return res.status(409).json({
-      ok: false,
-      reason: result.reason,
-      message: result.message,
-      attemptsRemaining: result.attemptsRemaining,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    if (msg === 'job_not_found') return res.status(404).json({ error: 'Récompense introuvable' });
-    if (msg === 'forbidden') return res.status(403).json({ error: 'Récompense non autorisée' });
-    if (msg.startsWith('invalid_status:')) return res.status(409).json({ error: 'Récompense déjà traitée' });
-    if (msg === 'daily_limit_reached') return res.status(429).json({ error: 'Limite de 3 tentatives atteinte, réessaie demain' });
-    if (msg === 'cooldown') return res.status(429).json({ error: 'Attends quelques secondes avant de réessayer' });
-    console.error('[payments/rewards/claim] error:', error);
-    return res.status(500).json({ error: 'Erreur serveur réclamation' });
   }
 });

@@ -35,7 +35,7 @@ const CHECK_MESSAGES: Record<string, string> = {
 };
 
 const PSEUDO_KEY = 'valoria-vote-pseudo';
-const PSEUDO_RE = /^[a-zA-Z0-9_]{2,32}$/;
+const PSEUDO_RE = /^[a-zA-Z0-9_]{2,16}$/;
 
 function savedPseudo(): string {
   try { return localStorage.getItem(PSEUDO_KEY) ?? ''; } catch { return ''; }
@@ -215,7 +215,7 @@ export default function VotesPage() {
                   type="text"
                   autoComplete="nickname"
                   spellCheck={false}
-                  maxLength={32}
+                  maxLength={16}
                   value={typedPseudo}
                   onChange={(e) => changePseudo(e.target.value)}
                   placeholder="Pseudo exact, comme en jeu"

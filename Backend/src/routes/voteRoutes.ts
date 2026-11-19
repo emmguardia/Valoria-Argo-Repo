@@ -1,17 +1,20 @@
 import { Router } from 'express';
 import { authenticateToken, optionalAuth } from '../middleware/authMiddleware.js';
 import { voteCheckLimiter, voteReadLimiter } from '../middleware/rateLimitMiddleware.js';
+import { clientIp } from '../utils/http.js';
 import {
-  IP_CHECKED_SITES,
+  IP_VOTE_WINDOW_MINUTES,
   checkVote,
+  isIpCheckedSite,
   isKnownSite,
   listSites,
 } from '../services/voteSiteAdapters.js';
 import {
   getMonthlyLeaderboard,
   getUserMonthlyVoteStats,
-  ipVotedToday,
+  ipVotedWithin,
   recordVoteAndReward,
+  voteAlreadyCounted,
 } from '../services/voteService.js';
 
 export const voteRouter = Router();
@@ -34,10 +37,8 @@ voteRouter.get('/leaderboard/monthly', voteReadLimiter, async (_req, res) => {
 
 // Stats perso du mois courant — nécessite auth.
 voteRouter.get('/me/stats', voteReadLimiter, authenticateToken, async (req, res) => {
-  const user = (req as any).user as { pseudo?: string } | undefined;
-  if (!user?.pseudo) return res.status(400).json({ error: 'Pseudo manquant sur le token' });
   try {
-    const stats = await getUserMonthlyVoteStats(user.pseudo);
+    const stats = await getUserMonthlyVoteStats(req.user!.pseudo);
     return res.json(stats);
   } catch (error) {
     console.error('[votes/me/stats] error:', error);
@@ -53,22 +54,23 @@ voteRouter.post('/check/:site', voteCheckLimiter, optionalAuth, async (req, res)
   if (!isKnownSite(site)) {
     return res.status(404).json({ error: 'Site inconnu' });
   }
-  const user = (req as any).user as { pseudo?: string } | undefined;
-  const mcUsername = String(user?.pseudo ?? req.body?.pseudo ?? '').trim();
-  if (!/^[a-zA-Z0-9_]{2,32}$/.test(mcUsername)) {
+  const mcUsername = String(req.user?.pseudo ?? req.body?.pseudo ?? '').trim();
+  if (!/^[a-zA-Z0-9_]{2,16}$/.test(mcUsername)) {
     return res.status(400).json({ error: 'Pseudo Minecraft invalide' });
   }
-  // Derrière Cloudflare, req.ip est le pod cloudflared : l'IP du joueur est dans CF-Connecting-IP
-  const ip = req.get('cf-connecting-ip') || req.ip || '';
+  const ip = clientIp(req);
 
   try {
-    if (IP_CHECKED_SITES.has(site) && await ipVotedToday(site, ip)) {
+    if (isIpCheckedSite(site) && await ipVotedWithin(site, ip, IP_VOTE_WINDOW_MINUTES[site])) {
       return res.json({ ok: false, reason: 'ip_already_used' });
     }
     const check = await checkVote(site, { mcUsername, ip });
     if (!check.ok) {
       console.log(`[votes/check] site=${site} user=${mcUsername} refusé : ${check.reason ?? 'inconnu'}`);
       return res.json({ ok: false, reason: check.reason });
+    }
+    if (check.votedAt && await voteAlreadyCounted(site, mcUsername, check.votedAt)) {
+      return res.json({ ok: false, reason: 'already_claimed' });
     }
     const result = await recordVoteAndReward({ siteName: site, mcUsername, ip, rawPayload: { pseudo: mcUsername } });
     if (!result.inserted) {

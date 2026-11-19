@@ -2,28 +2,38 @@ import { createPool } from 'mysql2/promise';
 import type { Pool } from 'mysql2/promise';
 import { env } from '../config/env.js';
 
-let pool: Pool | null = null;
+// Promesse gardée : des appels simultanés au démarrage partagent le même pool (un seul initSchema)
+let poolPromise: Promise<Pool> | null = null;
 
-export async function getDbPool(): Promise<Pool> {
+export function getDbPool(): Promise<Pool> {
   if (!env.DB_HOST || !env.DB_PORT || !env.DB_NAME || !env.DB_USER || !env.DB_PASSWORD) {
-    throw new Error('DB env vars manquantes (DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD).');
+    return Promise.reject(new Error('DB env vars manquantes (DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD).'));
   }
+  if (!poolPromise) {
+    const pool = createPool({
+      host: env.DB_HOST,
+      port: env.DB_PORT,
+      user: env.DB_USER,
+      password: env.DB_PASSWORD,
+      database: env.DB_NAME,
+      connectionLimit: 4,
+      waitForConnections: true,
+      enableKeepAlive: true
+    });
+    poolPromise = initSchema(pool).then(() => pool, (error) => {
+      poolPromise = null;
+      void pool.end().catch(() => {});
+      throw error;
+    });
+  }
+  return poolPromise;
+}
 
-  if (pool) return pool;
-
-  pool = createPool({
-    host: env.DB_HOST,
-    port: env.DB_PORT,
-    user: env.DB_USER,
-    password: env.DB_PASSWORD,
-    database: env.DB_NAME,
-    connectionLimit: 4,
-    waitForConnections: true,
-    enableKeepAlive: true
-  });
-
-  await initSchema(pool);
-  return pool;
+/** Arrêt du pod : ferme les connexions proprement. */
+export async function closeDbPool() {
+  const pending = poolPromise;
+  poolPromise = null;
+  if (pending) await (await pending.catch(() => null))?.end();
 }
 
 async function initSchema(db: Pool) {
@@ -83,5 +93,21 @@ async function initSchema(db: Pool) {
       KEY idx_reward_delivery_status_next (status, next_attempt_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  // Votes vérifiés par l'IP du joueur : une IP ne vaut qu'un vote par site et par jour, même avec deux pseudos
+  // envoyés en même temps (la contrainte tranche, pas seulement le contrôle préalable).
+  // Un échec ici (doublons anciens) ne doit pas empêcher le site de démarrer : le contrôle applicatif reste en place.
+  const ipSites = IP_CHECKED_VOTE_SITES.map((s) => `'${s}'`).join(', ');
+  try {
+    await db.execute(
+      `ALTER TABLE votes ADD COLUMN IF NOT EXISTS ip_key VARCHAR(64)
+         GENERATED ALWAYS AS (IF(site_name IN (${ipSites}), callback_ip, NULL)) STORED`);
+    await db.execute('ALTER TABLE votes ADD UNIQUE KEY IF NOT EXISTS uniq_site_ip_day (site_name, ip_key, voted_day)');
+  } catch (error) {
+    console.error('[db] contrainte de vote par IP non posée :', error);
+  }
 }
+
+// Sites de vote vérifiés par IP (voir services/voteSiteAdapters.ts)
+export const IP_CHECKED_VOTE_SITES = ['serveursminecraft', 'liste-serveurs-minecraft'] as const;
 

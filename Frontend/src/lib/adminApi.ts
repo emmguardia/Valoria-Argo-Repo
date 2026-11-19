@@ -119,8 +119,6 @@ export const adminApi = {
       `/api/admin/reward-jobs?${qs.toString()}`, token
     );
   },
-  reopenRewardJob: (token: string | null, id: number) =>
-    request<{ ok: true }>(`/api/admin/reward-jobs/${id}/reopen`, token, { method: 'POST' }),
 };
 
 export interface AdminUser {

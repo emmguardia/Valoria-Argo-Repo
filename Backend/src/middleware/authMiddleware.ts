@@ -1,57 +1,57 @@
 import type { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env.js';
+import type { RowDataPacket } from 'mysql2/promise';
+import { getDbPool } from '../db/mysql.js';
+import { verifyToken } from '../services/jwt.js';
 
-type JwtPayload = {
-  userId: string;
-  pseudo?: string;
-  email?: string;
-  role?: 'user' | 'admin';
-  iat?: number;
-  exp?: number;
-};
+/** Compte de la requête, relu en base à chaque appel : un ban, un retrait du rôle admin ou un nouveau pseudo comptent tout de suite. */
+export type AuthUser = { userId: string; pseudo: string; email: string; role: 'user' | 'admin'; linked: boolean };
 
-export function authenticateToken(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+type Loaded = { user: AuthUser } | { banned: true } | null;
 
-  if (!token) {
-    return res.status(401).json({ error: 'Token manquant' });
-  }
+async function loadUser(req: Request): Promise<Loaded> {
+  const userId = verifyToken(req.headers.authorization?.split(' ')[1]);
+  if (!userId) return null;
+  const db = await getDbPool();
+  const [rows] = await db.execute<RowDataPacket[]>(
+    'SELECT id, pseudo, email, role, mc_uuid, banned_at FROM users WHERE id = ? LIMIT 1', [userId]);
+  const row = rows[0];
+  if (!row) return null;
+  if (row.banned_at) return { banned: true };
+  return {
+    user: {
+      userId: String(row.id), pseudo: String(row.pseudo), email: String(row.email),
+      role: row.role === 'admin' ? 'admin' : 'user', linked: Boolean(row.mc_uuid),
+    },
+  };
+}
 
-  if (!env.JWT_PUBLIC_KEY) {
-    return res.status(500).json({ error: 'JWT_PUBLIC_KEY non configurée' });
-  }
-
+export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
+  if (!req.headers.authorization) return res.status(401).json({ error: 'Token manquant' });
   try {
-    const decoded = jwt.verify(token, env.JWT_PUBLIC_KEY, { algorithms: ['RS256'] }) as JwtPayload;
-    (req as any).user = decoded;
+    const loaded = await loadUser(req);
+    if (!loaded) return res.status(401).json({ error: 'Token invalide' });
+    if ('banned' in loaded) return res.status(403).json({ error: 'Compte suspendu' });
+    req.user = loaded.user;
     return next();
-  } catch {
-    return res.status(403).json({ error: 'Token invalide' });
+  } catch (error) {
+    console.error('[auth] lecture du compte impossible:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 }
 
-// Comme authenticateToken, mais laisse passer sans compte (req.user reste vide si le token est absent ou invalide)
-export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (token && env.JWT_PUBLIC_KEY) {
-    try {
-      (req as any).user = jwt.verify(token, env.JWT_PUBLIC_KEY, { algorithms: ['RS256'] }) as JwtPayload;
-    } catch {
-      // token expiré ou invalide : on continue comme un visiteur
-    }
+// Comme authenticateToken, mais laisse passer sans compte (req.user reste vide si le jeton est absent, invalide ou banni)
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  try {
+    const loaded = req.headers.authorization ? await loadUser(req) : null;
+    if (loaded && 'user' in loaded) req.user = loaded.user;
+  } catch (error) {
+    console.error('[auth] lecture du compte impossible:', error);
   }
   return next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const user = (req as any).user as JwtPayload | undefined;
-  if (!user?.userId) {
-    return res.status(401).json({ error: 'Token invalide' });
-  }
-  if (user.role !== 'admin') {
-    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
-  }
+  if (!req.user) return res.status(401).json({ error: 'Token invalide' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
   return next();
 }

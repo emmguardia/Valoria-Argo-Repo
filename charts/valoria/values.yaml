@@ -71,13 +71,3 @@ nginx:
     enabled: true
     upstream: http://valoria-backend:3000
 
-ingress:
-  enabled: false
-  className: ""
-  annotations:
-    kubernetes.io/ingress.class: traefik
-  host: valoria.zenixweb.fr
-  tls:
-    enabled: false
-    secretName: valoria-tls
-

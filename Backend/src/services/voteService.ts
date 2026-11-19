@@ -3,7 +3,7 @@ import { getDbPool } from '../db/mysql.js';
 import { enqueueCommand } from './serverQueueService.js';
 
 function buildVoteRewardCommand(mcUsername: string): string {
-  if (!/^[a-zA-Z0-9_]{2,32}$/.test(mcUsername)) {
+  if (!/^[a-zA-Z0-9_]{2,16}$/.test(mcUsername)) {
     throw new Error('mc_username invalide');
   }
   return env.VOTE_REWARD_COMMAND.replace(/\{user\}/g, mcUsername);
@@ -30,7 +30,9 @@ export async function recordVoteAndReward(args: {
     );
   } catch (error: any) {
     if (error?.code === 'ER_DUP_ENTRY') {
-      return { inserted: false, rconOk: false, reason: 'already_voted_today' };
+      // Contrainte par IP (sites vérifiés par IP) ou par pseudo
+      const byIp = String(error?.message ?? '').includes('uniq_site_ip_day');
+      return { inserted: false, rconOk: false, reason: byIp ? 'ip_already_used' : 'already_voted_today' };
     }
     throw error;
   }
@@ -62,13 +64,24 @@ export async function recordVoteAndReward(args: {
   }
 }
 
-// Sites vérifiés par IP : cette IP a-t-elle déjà valu un vote aujourd'hui sur ce site (pour n'importe quel pseudo) ?
-export async function ipVotedToday(siteName: string, ip: string): Promise<boolean> {
+/** Sites vérifiés par IP : cette IP a-t-elle déjà valu un vote sur ce site ces dernières minutes (n'importe quel pseudo) ? */
+export async function ipVotedWithin(siteName: string, ip: string, minutes: number): Promise<boolean> {
   if (!ip) return false;
   const db = await getDbPool();
   const [rows] = await db.execute(
-    'SELECT 1 FROM votes WHERE site_name = ? AND callback_ip = ? AND voted_day = CURRENT_DATE() LIMIT 1',
-    [siteName, ip]
+    'SELECT 1 FROM votes WHERE site_name = ? AND callback_ip = ? AND voted_at > NOW() - INTERVAL ? MINUTE LIMIT 1',
+    [siteName, ip, minutes]
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+/** Ce vote (heure donnée par le site) a-t-il déjà été compté pour ce joueur ? */
+export async function voteAlreadyCounted(siteName: string, mcUsername: string, votedAt: Date): Promise<boolean> {
+  const db = await getDbPool();
+  const [rows] = await db.execute(
+    // FROM_UNIXTIME : même fuseau que NOW() (qui a rempli voted_at), quel que soit celui du pod
+    'SELECT 1 FROM votes WHERE site_name = ? AND mc_username = ? AND voted_at >= FROM_UNIXTIME(?) LIMIT 1',
+    [siteName, mcUsername, Math.floor(votedAt.getTime() / 1000)]
   );
   return Array.isArray(rows) && rows.length > 0;
 }

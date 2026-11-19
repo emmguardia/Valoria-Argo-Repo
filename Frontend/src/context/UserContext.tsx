@@ -1,11 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-
-export interface PurchaseRecord {
-  productId: number;
-  productName: string;
-  price: number;
-  date: string;
-}
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 
 export interface UserProfile {
   pseudo: string;
@@ -22,15 +15,12 @@ interface UserContextType {
   ecus: number;
   profile: UserProfile | null;
   token: string | null;
-  purchaseHistory: PurchaseRecord[];
   register: (data: { pseudo: string; email: string; password: string }) => Promise<void>;
   login: (data: { identifier: { pseudo?: string; email?: string }; password: string; rememberMe?: boolean }) => Promise<void>;
   logout: () => void;
-  addEcus: (amount: number) => void;
-  spendEcus: (amount: number) => boolean;
-  addPurchase: (record: PurchaseRecord) => void;
   updateProfile: (data: Partial<UserProfile>) => void;
-  deleteAccount: () => void;
+  /** Supprime le compte (mot de passe redemandé) ; erreur levée si le serveur refuse, la session reste alors ouverte */
+  deleteAccount: (password: string) => Promise<void>;
   /** renonceRetractation : case des CGV cochée (livraison immédiate, plus de droit de rétractation) */
   createEcusCheckout: (ecus: number, renonceRetractation: boolean) => Promise<string>;
   confirmEcusCheckout: (sessionId: string) => Promise<{ credited: number; ecus: number; duplicated?: boolean }>;
@@ -46,276 +36,125 @@ interface StoredUserState {
   token: string | null;
   ecus: number;
   profile: UserProfile | null;
-  purchaseHistory: PurchaseRecord[];
 }
+
+const LOGGED_OUT: StoredUserState = { isLoggedIn: false, token: null, ecus: 0, profile: null };
 
 function readStoredUser(): StoredUserState {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return {
-        isLoggedIn: false,
-        token: null,
-        ecus: 0,
-        profile: null as UserProfile | null,
-        purchaseHistory: [] as PurchaseRecord[],
-      };
-    }
-
-    const data = JSON.parse(stored);
-    if (!data?.loggedIn) {
-      return {
-        isLoggedIn: false,
-        token: data?.token ?? null,
-        ecus: 0,
-        profile: null as UserProfile | null,
-        purchaseHistory: [] as PurchaseRecord[],
-      };
-    }
-
-    return {
-      isLoggedIn: true,
-      token: data?.token ?? null,
-      ecus: data.ecus ?? 0,
-      profile: data.profile ?? null,
-      purchaseHistory: data.purchaseHistory ?? [],
-    };
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+    if (!data?.loggedIn) return LOGGED_OUT;
+    return { isLoggedIn: true, token: data.token ?? null, ecus: data.ecus ?? 0, profile: data.profile ?? null };
   } catch {
-    return {
-      isLoggedIn: false,
-      token: null,
-      ecus: 0,
-      profile: null as UserProfile | null,
-      purchaseHistory: [] as PurchaseRecord[],
-    };
+    return LOGGED_OUT;
   }
 }
 
+/** Profil tel que renvoyé par l'API (inscription, connexion, /api/auth/me). */
+function profileFrom(user: Record<string, unknown> | undefined): UserProfile {
+  return {
+    pseudo: String(user?.pseudo || ''),
+    email: String(user?.email || ''),
+    role: user?.role === 'admin' ? 'admin' : 'user',
+    linked: Boolean(user?.linked),
+    emailVerified: Boolean(user?.emailVerified),
+  };
+}
+
+/** Erreur d'une requête de l'API, avec son statut HTTP. */
+class ApiError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
+
+async function api(path: string, init: RequestInit & { token?: string | null } = {}) {
+  const { token, ...rest } = init;
+  const response = await fetch(path, {
+    ...rest,
+    headers: {
+      ...(rest.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(payload?.error || `Erreur ${response.status}`, response.status);
+  return payload;
+}
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const initial: StoredUserState = readStoredUser();
+  const [initial] = useState(readStoredUser);
   const [isLoggedIn, setIsLoggedIn] = useState(initial.isLoggedIn);
   const [token, setToken] = useState<string | null>(initial.token);
   const [ecus, setEcus] = useState(initial.ecus);
   const [profile, setProfile] = useState<UserProfile | null>(initial.profile);
-  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseRecord[]>(initial.purchaseHistory);
 
-  const persist = useCallback(
-    (loggedIn: boolean, tokenValue: string | null, ecusAmount: number, prof: UserProfile | null, history: PurchaseRecord[]) => {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ loggedIn, token: tokenValue, ecus: ecusAmount, profile: prof, purchaseHistory: history })
-      );
-    },
-    []
-  );
-
-  const refreshUserData = useCallback(async () => {
-    if (!token) return;
-    const response = await fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload?.error || 'Erreur lors du rafraîchissement du profil');
+  // Session ouverte ou mise à jour : état et copie dans le navigateur
+  const open = useCallback((tokenValue: string, ecusAmount: number, prof: UserProfile) => {
+    setToken(tokenValue);
+    setIsLoggedIn(true);
+    setEcus(ecusAmount);
+    setProfile(prof);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ loggedIn: true, token: tokenValue, ecus: ecusAmount, profile: prof }));
+    } catch {
+      // stockage indisponible (navigation privée) : la session dure le temps de l'onglet
     }
-    const newProfile: UserProfile = {
-      pseudo: String(payload.pseudo || ''),
-      email: String(payload.email || ''),
-      role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
-      linked: Boolean(payload.linked),
-      emailVerified: Boolean(payload.emailVerified),
-    };
-    const newEcus = Number(payload.ecus ?? 0);
-    setProfile(newProfile);
-    setEcus(newEcus);
-    persist(true, token, newEcus, newProfile, purchaseHistory);
-  }, [token, persist, purchaseHistory]);
-
-  const register = useCallback(
-    async (data: { pseudo: string; email: string; password: string }) => {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pseudo: data.pseudo, email: data.email, password: data.password }),
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Erreur lors de l’inscription');
-      }
-
-      const tokenValue = payload?.token;
-      const user = payload?.user;
-      if (!tokenValue || !user) throw new Error('Réponse d’inscription invalide');
-
-      const newProfile: UserProfile = {
-        pseudo: String(user.pseudo || ''),
-        email: String(user.email || ''),
-        role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
-        linked: Boolean(user.linked),
-        emailVerified: Boolean(user.emailVerified),
-      };
-
-      setToken(tokenValue);
-      setIsLoggedIn(true);
-      setEcus(Number(user.ecus ?? 0));
-      setProfile(newProfile);
-      setPurchaseHistory([]);
-      persist(true, tokenValue, Number(user.ecus ?? 0), newProfile, []);
-    },
-    [persist]
-  );
-
-  const login = useCallback(
-    async (data: { identifier: { pseudo?: string; email?: string }; password: string; rememberMe?: boolean }) => {
-      const body: {
-        pseudo?: string;
-        email?: string;
-        password: string;
-        rememberMe?: boolean;
-      } = {
-        password: data.password,
-        rememberMe: Boolean(data.rememberMe),
-      };
-
-      if (data.identifier.pseudo) body.pseudo = data.identifier.pseudo;
-      if (data.identifier.email) body.email = data.identifier.email;
-
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Erreur lors de la connexion');
-      }
-
-      const tokenValue = payload?.token;
-      const user = payload?.user;
-      if (!tokenValue || !user) throw new Error('Réponse de connexion invalide');
-
-      const newProfile: UserProfile = {
-        pseudo: String(user.pseudo || ''),
-        email: String(user.email || ''),
-        role: (user.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
-        linked: Boolean(user.linked),
-        emailVerified: Boolean(user.emailVerified),
-      };
-
-      setToken(tokenValue);
-      setIsLoggedIn(true);
-      setEcus(Number(user.ecus ?? 0));
-      setProfile(newProfile);
-      setPurchaseHistory([]);
-      persist(true, tokenValue, Number(user.ecus ?? 0), newProfile, []);
-    },
-    [persist]
-  );
+  }, []);
 
   const logout = useCallback(() => {
     setIsLoggedIn(false);
     setEcus(0);
     setProfile(null);
-    setPurchaseHistory([]);
     setToken(null);
-    localStorage.removeItem(STORAGE_KEY);
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* stockage indisponible */ }
   }, []);
 
-  const addEcus = useCallback((amount: number) => {
-    setEcus((prev) => prev + amount);
-  }, []);
+  const refreshUserData = useCallback(async () => {
+    if (!token) return;
+    const payload = await api('/api/auth/me', { token });
+    open(token, Number(payload.ecus ?? 0), profileFrom(payload));
+  }, [token, open]);
 
-  const spendEcus = useCallback(
-    (amount: number) => {
-      if (ecus < amount) return false;
-      setEcus((prev) => prev - amount);
-      return true;
+  const register = useCallback(async (data: { pseudo: string; email: string; password: string }) => {
+    const payload = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) });
+    if (!payload?.token || !payload?.user) throw new Error('Réponse d’inscription invalide');
+    open(payload.token, Number(payload.user.ecus ?? 0), profileFrom(payload.user));
+  }, [open]);
+
+  const login = useCallback(
+    async (data: { identifier: { pseudo?: string; email?: string }; password: string; rememberMe?: boolean }) => {
+      const payload = await api('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ ...data.identifier, password: data.password, rememberMe: Boolean(data.rememberMe) }),
+      });
+      if (!payload?.token || !payload?.user) throw new Error('Réponse de connexion invalide');
+      open(payload.token, Number(payload.user.ecus ?? 0), profileFrom(payload.user));
     },
-    [ecus]
+    [open]
   );
-
-  const addPurchase = useCallback((record: PurchaseRecord) => {
-    setPurchaseHistory((prev) => [record, ...prev]);
-  }, []);
 
   const updateProfile = useCallback(
     (data: Partial<UserProfile>) => {
       if (!token) return;
-
-      void fetch('/api/auth/me', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pseudo: data.pseudo,
-          email: data.email,
-        }),
-      })
-        .then(async (r) => {
-          const payload = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(payload?.error || 'Erreur lors de la mise à jour');
-
-          const newProfile: UserProfile = {
-            pseudo: String(payload?.pseudo || ''),
-            email: String(payload?.email || ''),
-            role: (payload?.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
-            linked: Boolean(payload?.linked),
-            emailVerified: Boolean(payload?.emailVerified),
-          };
-
-          setProfile(newProfile);
-          setEcus(Number(payload?.ecus ?? ecus));
-          persist(true, token, Number(payload?.ecus ?? ecus), newProfile, purchaseHistory);
-        })
-        .catch((err) => {
-          window.alert(err instanceof Error ? err.message : 'Erreur lors de la mise à jour');
-        });
+      api('/api/auth/me', { method: 'PUT', token, body: JSON.stringify({ pseudo: data.pseudo, email: data.email }) })
+        .then((payload) => open(token, Number(payload?.ecus ?? 0), profileFrom(payload)))
+        .catch((err) => window.alert(err instanceof Error ? err.message : 'Erreur lors de la mise à jour'));
     },
-    [token, ecus, persist, purchaseHistory]
+    [token, open]
   );
 
-  const deleteAccount = useCallback(async () => {
-    if (!token) {
-      logout();
-      return;
-    }
-    const response = await fetch('/api/auth/me', {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) {
-      // On n'empêche pas la déconnexion côté UI : c'est plus simple pour l'utilisateur.
-      logout();
-      return;
-    }
+  const deleteAccount = useCallback(async (password: string) => {
+    if (!token) return logout();
+    await api('/api/auth/me', { method: 'DELETE', token, body: JSON.stringify({ password }) });
     logout();
   }, [logout, token]);
 
   const createEcusCheckout = useCallback(
     async (ecusAmount: number, renonceRetractation: boolean) => {
       if (!token) throw new Error('Connecte-toi pour acheter des Écus');
-
-      const response = await fetch('/api/payments/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ecus: ecusAmount, renonceRetractation }),
+      const payload = await api('/api/payments/create-checkout-session', {
+        method: 'POST', token, body: JSON.stringify({ ecus: ecusAmount, renonceRetractation }),
       });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Erreur lors de la création du paiement');
-      }
-      if (!payload?.url) {
-        throw new Error('URL de paiement introuvable');
-      }
-
+      if (!payload?.url) throw new Error('URL de paiement introuvable');
       return String(payload.url);
     },
     [token]
@@ -324,94 +163,37 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const confirmEcusCheckout = useCallback(
     async (sessionId: string) => {
       if (!token) throw new Error('Connecte-toi pour valider le paiement');
-      const response = await fetch('/api/payments/confirm-checkout-session', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ sessionId }),
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Impossible de valider le paiement');
-      }
+      const payload = await api('/api/payments/confirm-checkout-session', { method: 'POST', token, body: JSON.stringify({ sessionId }) });
       const nextEcus = Number(payload?.ecus);
-      if (Number.isFinite(nextEcus)) {
-        setEcus(nextEcus);
-        persist(true, token, nextEcus, profile, purchaseHistory);
-      } else {
-        await refreshUserData();
-      }
+      if (Number.isFinite(nextEcus) && profile) open(token, nextEcus, profile);
+      else await refreshUserData();
       return {
         credited: Number(payload?.credited ?? 0),
         ecus: Number.isFinite(nextEcus) ? nextEcus : ecus,
         duplicated: Boolean(payload?.duplicated),
       };
     },
-    [token, persist, profile, purchaseHistory, refreshUserData, ecus]
+    [token, profile, open, refreshUserData, ecus]
   );
 
+  // Au chargement : solde et profil à jour depuis le serveur. Seul un refus du jeton (401) ou un compte suspendu
+  // (403) déconnecte ; une coupure réseau ou une limite de requêtes (429) garde la session.
   useEffect(() => {
     if (!isLoggedIn || !token) return;
-
     let cancelled = false;
-    // Sync depuis le backend (permet d'avoir le bon solde ECUS).
-    void fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (r) => {
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload?.error || 'Erreur lors du chargement du profil');
-        if (cancelled) return;
-        const newProfile: UserProfile = {
-      pseudo: String(payload.pseudo || ''),
-      email: String(payload.email || ''),
-      role: (payload.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
-      linked: Boolean(payload.linked),
-      emailVerified: Boolean(payload.emailVerified),
-    };
-        const newEcus = Number(payload.ecus ?? 0);
-        setProfile(newProfile);
-        setEcus(newEcus);
-        persist(true, token, newEcus, newProfile, purchaseHistory);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Token expiré ou invalide -> déconnecter
-        logout();
-      });
+    api('/api/auth/me', { token })
+      .then((payload) => { if (!cancelled) open(token, Number(payload.ecus ?? 0), profileFrom(payload)); })
+      .catch((err) => { if (!cancelled && err instanceof ApiError && (err.status === 401 || err.status === 403)) logout(); });
+    return () => { cancelled = true; };
+  }, [isLoggedIn, token, logout, open]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoggedIn, token, logout, persist, purchaseHistory]);
+  const value = useMemo<UserContextType>(() => ({
+    isLoggedIn, ecus, profile, token, login, register, logout, updateProfile, deleteAccount,
+    createEcusCheckout, confirmEcusCheckout, refreshUserData,
+  }), [isLoggedIn, ecus, profile, token, login, register, logout, updateProfile, deleteAccount,
+    createEcusCheckout, confirmEcusCheckout, refreshUserData]);
 
-  return (
-    <UserContext.Provider
-      value={{
-        isLoggedIn,
-        ecus,
-        profile,
-        token,
-        purchaseHistory,
-        login,
-        register,
-        logout,
-        addEcus,
-        spendEcus,
-        addPurchase,
-        updateProfile,
-        deleteAccount,
-        createEcusCheckout,
-        confirmEcusCheckout,
-        refreshUserData,
-      }}
-    >
-      {children}
-    </UserContext.Provider>
-  );
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 
 export function useUser() {

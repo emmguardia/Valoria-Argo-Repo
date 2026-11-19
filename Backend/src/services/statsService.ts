@@ -75,15 +75,6 @@ function cleanReferrer(raw: unknown): string {
   }
 }
 
-async function bump(day: string, dimension: string, value: string, visitorIsNew: boolean) {
-  const db = await getDbPool();
-  await db.execute(
-    `INSERT INTO stats_site_daily (day, dimension, value, views, visitors) VALUES (?, ?, ?, 1, ?)
-     ON DUPLICATE KEY UPDATE views = views + 1, visitors = visitors + VALUES(visitors)`,
-    [day, dimension, value, visitorIsNew ? 1 : 0]
-  );
-}
-
 /**
  * Une page vue. Rien d'identifiant n'est gardé : l'IP et le navigateur ne servent qu'à l'empreinte du jour,
  * jamais écrits. Les robots et ceux qui demandent à ne pas être suivis ne sont pas comptés.
@@ -103,8 +94,13 @@ export async function recordPageView(input: { path: unknown; referrer: unknown; 
     page: path, provenance: cleanReferrer(input.referrer), appareil: device(input.userAgent),
     navigateur: browser(input.userAgent), systeme: system(input.userAgent), pays: country,
   };
-  await bump(day, 'total', 'total', isNew);
-  for (const d of DIMENSIONS) await bump(day, d, values[d], isNew);
+  // Le total et chaque dimension en une seule requête
+  const rows: [string, string][] = [['total', 'total'], ...DIMENSIONS.map((d): [string, string] => [d, values[d]])];
+  await db.execute(
+    `INSERT INTO stats_site_daily (day, dimension, value, views, visitors) VALUES ${rows.map(() => '(?, ?, ?, 1, ?)').join(', ')}
+     ON DUPLICATE KEY UPDATE views = views + 1, visitors = visitors + VALUES(visitors)`,
+    rows.flatMap(([dimension, value]) => [day, dimension, value, isNew ? 1 : 0])
+  );
 }
 
 // ─────────────────────────────── Serveur Minecraft ───────────────────────────────
@@ -134,13 +130,14 @@ export async function recordServerStats(input: {
       [minute, m.online, m.tps, m.mspt, m.memoryUsedMb, m.memoryMaxMb, m.cpuPercent, m.chunks, m.entities]
     );
   }
-  for (const p of input.players ?? []) {
-    if (!/^[0-9a-f]{64}$/.test(p.player)) continue;
+  const players = (input.players ?? []).filter((p) => /^[0-9a-f]{64}$/.test(p.player));
+  if (players.length > 0) {
     await db.execute(
-      `INSERT INTO stats_server_players (day, player, first_join, sessions, playtime_seconds) VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO stats_server_players (day, player, first_join, sessions, playtime_seconds)
+       VALUES ${players.map(() => '(?, ?, ?, ?, ?)').join(', ')}
        ON DUPLICATE KEY UPDATE first_join = GREATEST(first_join, VALUES(first_join)),
          sessions = sessions + VALUES(sessions), playtime_seconds = playtime_seconds + VALUES(playtime_seconds)`,
-      [day, p.player, p.firstJoin ? 1 : 0, p.sessions, p.playtimeSeconds]
+      players.flatMap((p) => [day, p.player, p.firstJoin ? 1 : 0, p.sessions, p.playtimeSeconds])
     );
   }
   if (input.snapshot) {
@@ -168,28 +165,50 @@ export async function readStats(days: number) {
   };
   const q = async (sql: string, params: any[] = []) => (await db.execute(sql, params))[0] as any[];
 
-  const siteTotal = await q(`SELECT day, views, visitors FROM stats_site_daily WHERE dimension = 'total' AND day >= ?`, [since]);
-  const top = async (dimension: string, limit = 12) => (await q(
+  const top = (dimension: string, limit = 12) => q(
     `SELECT value, SUM(views) AS views, SUM(visitors) AS visitors FROM stats_site_daily
-     WHERE dimension = ? AND day >= ? GROUP BY value ORDER BY views DESC LIMIT ${limit}`, [dimension, since]))
-    .map((r) => ({ label: String(r.value), views: Number(r.views), visitors: Number(r.visitors) }));
+     WHERE dimension = ? AND day >= ? GROUP BY value ORDER BY views DESC LIMIT ${limit}`, [dimension, since])
+    .then((rows) => rows.map((r) => ({ label: String(r.value), views: Number(r.views), visitors: Number(r.visitors) })));
 
-  const hourly = await q(
-    `SELECT DATE_FORMAT(at, '%Y-%m-%d %H:00') AS hour, MAX(online) AS online, MIN(tps) AS tps, MAX(mspt) AS mspt,
-            MAX(memory_used_mb) AS memory, MAX(memory_max_mb) AS memory_max, AVG(cpu_percent) AS cpu,
-            MAX(chunks) AS chunks, MAX(entities) AS entities
-     FROM stats_server_minutes WHERE at >= ? GROUP BY hour ORDER BY hour`, [since]);
-  const players = await q(
-    `SELECT day, COUNT(*) AS unique_players, SUM(first_join) AS new_players, SUM(sessions) AS sessions,
-            SUM(playtime_seconds) AS playtime FROM stats_server_players WHERE day >= ? GROUP BY day`, [since]);
+  // Requêtes par groupes de 4 en parallèle : le pool a 4 connexions, d'autres requêtes passent entre deux groupes
+  const [siteTotal, pages, referrers, devices] = await Promise.all([
+    q(`SELECT day, views, visitors FROM stats_site_daily WHERE dimension = 'total' AND day >= ?`, [since]),
+    top('page'), top('provenance'), top('appareil', 5),
+  ]);
+  const [browsers, systems, countries, hourly] = await Promise.all([
+    top('navigateur', 8), top('systeme', 8), top('pays', 12),
+    q(`SELECT DATE_FORMAT(at, '%Y-%m-%d %H:00') AS hour, MAX(online) AS online, MIN(tps) AS tps, MAX(mspt) AS mspt,
+              MAX(memory_used_mb) AS memory, MAX(memory_max_mb) AS memory_max, AVG(cpu_percent) AS cpu,
+              MAX(chunks) AS chunks, MAX(entities) AS entities
+       FROM stats_server_minutes WHERE at >= ? GROUP BY hour ORDER BY hour`, [since]),
+  ]);
   // Rétention : pour chaque jour d'arrivée, nouveaux joueurs revenus le lendemain, dans les 7 et dans les 30 jours.
   // Une fenêtre pas encore écoulée (arrivés hier pour J+7…) est rendue null : pas de faux zéro.
-  const cohorts = await q(
-    `SELECT n.day, COUNT(*) AS arrivals, AVG(n.playtime_seconds) AS first_day_seconds,
-       SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day = n.day + INTERVAL 1 DAY)) AS d1,
-       SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day > n.day AND r.day <= n.day + INTERVAL 7 DAY)) AS d7,
-       SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day > n.day AND r.day <= n.day + INTERVAL 30 DAY)) AS d30
-     FROM stats_server_players n WHERE n.first_join = 1 AND n.day >= ? GROUP BY n.day ORDER BY n.day`, [since]);
+  const [players, cohorts, snapshots, lasts] = await Promise.all([
+    q(`SELECT day, COUNT(*) AS unique_players, SUM(first_join) AS new_players, SUM(sessions) AS sessions,
+              SUM(playtime_seconds) AS playtime FROM stats_server_players WHERE day >= ? GROUP BY day`, [since]),
+    q(`SELECT n.day, COUNT(*) AS arrivals, AVG(n.playtime_seconds) AS first_day_seconds,
+         SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day = n.day + INTERVAL 1 DAY)) AS d1,
+         SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day > n.day AND r.day <= n.day + INTERVAL 7 DAY)) AS d7,
+         SUM(EXISTS(SELECT 1 FROM stats_server_players r WHERE r.player = n.player AND r.day > n.day AND r.day <= n.day + INTERVAL 30 DAY)) AS d30
+       FROM stats_server_players n WHERE n.first_join = 1 AND n.day >= ? GROUP BY n.day ORDER BY n.day`, [since]),
+    q('SELECT at, data FROM stats_server_snapshots ORDER BY at DESC LIMIT 1'),
+    q('SELECT * FROM stats_server_minutes ORDER BY at DESC LIMIT 1'),
+  ]);
+  const [accounts, linked, totalUsers, revenue] = await Promise.all([
+    q(`SELECT DATE(created_at) AS day, COUNT(*) AS n FROM users WHERE created_at >= ? GROUP BY day`, [since]),
+    q(`SELECT COUNT(*) AS n FROM users WHERE mc_uuid IS NOT NULL`),
+    q(`SELECT COUNT(*) AS n FROM users`),
+    q(`SELECT DATE(created_at) AS day, SUM(amount_cents) AS cents, SUM(ecus_amount) AS ecus FROM stripe_ecus_payments WHERE created_at >= ? GROUP BY day`, [since]),
+  ]);
+  const [purchases, purchasesByDay, votes, votesBySite] = await Promise.all([
+    q(`SELECT product_name AS name, COUNT(*) AS n, SUM(price_ecus) AS ecus FROM product_purchases WHERE created_at >= ? GROUP BY product_name ORDER BY n DESC`, [since]),
+    q(`SELECT DATE(created_at) AS day, COUNT(*) AS n FROM product_purchases WHERE created_at >= ? GROUP BY day`, [since]),
+    q(`SELECT DATE(voted_at) AS day, COUNT(*) AS n FROM votes WHERE voted_at >= ? GROUP BY day`, [since]),
+    q(`SELECT site_name AS name, COUNT(*) AS n FROM votes WHERE voted_at >= ? GROUP BY site_name ORDER BY n DESC`, [since]),
+  ]);
+  const snapshot = snapshots[0] ?? null;
+  const last = lasts[0] ?? null;
   const today = parisDay();
   const elapsed = (day: string, n: number) => parisDay(new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000)) < today;
   const retention = cohorts.map((c) => {
@@ -204,25 +223,13 @@ export async function readStats(days: number) {
     const arrivals = done.reduce((a, r) => a + r.arrivals, 0);
     return arrivals ? Math.round((done.reduce((a, r) => a + (r[key] ?? 0), 0) / arrivals) * 1000) / 10 : null;
   };
-  const snapshot = (await q('SELECT at, data FROM stats_server_snapshots ORDER BY at DESC LIMIT 1'))[0] ?? null;
-  const last = (await q('SELECT * FROM stats_server_minutes ORDER BY at DESC LIMIT 1'))[0] ?? null;
-
-  const accounts = await q(`SELECT DATE(created_at) AS day, COUNT(*) AS n FROM users WHERE created_at >= ? GROUP BY day`, [since]);
-  const linked = await q(`SELECT COUNT(*) AS n FROM users WHERE mc_uuid IS NOT NULL`);
-  const totalUsers = await q(`SELECT COUNT(*) AS n FROM users`);
-  const revenue = await q(`SELECT DATE(created_at) AS day, SUM(amount_cents) AS cents, SUM(ecus_amount) AS ecus FROM stripe_ecus_payments WHERE created_at >= ? GROUP BY day`, [since]);
-  const purchases = await q(`SELECT product_name AS name, COUNT(*) AS n, SUM(price_ecus) AS ecus FROM product_purchases WHERE created_at >= ? GROUP BY product_name ORDER BY n DESC`, [since]);
-  const purchasesByDay = await q(`SELECT DATE(created_at) AS day, COUNT(*) AS n FROM product_purchases WHERE created_at >= ? GROUP BY day`, [since]);
-  const votes = await q(`SELECT DATE(voted_at) AS day, COUNT(*) AS n FROM votes WHERE voted_at >= ? GROUP BY day`, [since]);
-  const votesBySite = await q(`SELECT site_name AS name, COUNT(*) AS n FROM votes WHERE voted_at >= ? GROUP BY site_name ORDER BY n DESC`, [since]);
 
   return {
     days,
     site: {
       visitors: series(siteTotal, 'day', 'visitors'),
       views: series(siteTotal, 'day', 'views'),
-      pages: await top('page'), referrers: await top('provenance'), devices: await top('appareil', 5),
-      browsers: await top('navigateur', 8), systems: await top('systeme', 8), countries: await top('pays', 12),
+      pages, referrers, devices, browsers, systems, countries,
     },
     server: {
       now: last ? {

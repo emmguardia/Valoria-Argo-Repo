@@ -35,26 +35,39 @@ function fillCommand(template: string, uuid: string) {
   return template.replace(/\{uuid\}/g, uuid);
 }
 
-/** Prix à payer pour ce joueur : un produit « montée en gamme » ne coûte que la différence s'il a déjà le précédent. */
-async function priceFor(conn: PoolConnection, userId: number, product: any): Promise<{ price: number; owned: boolean; upgrade: boolean }> {
-  const owns = async (slug: string) => {
-    const [rows] = await conn.execute('SELECT 1 FROM product_purchases WHERE user_id = ? AND product_slug = ? LIMIT 1', [userId, slug]);
-    return Array.isArray(rows) && rows.length > 0;
-  };
-  // Déjà possédé : le produit lui-même, ou mieux (avoir le VIP+ compte comme avoir le VIP)
-  let owned = Boolean(product.one_time) && await owns(String(product.slug));
-  if (Boolean(product.one_time) && !owned) {
-    const [better] = await conn.execute(
-      `SELECT 1 FROM product_purchases pp JOIN products p ON p.slug = pp.product_slug
-       WHERE pp.user_id = ? AND p.upgrade_from = ? LIMIT 1`, [userId, product.slug]);
-    owned = Array.isArray(better) && better.length > 0;
+/** Ce que le joueur possède déjà : produits achetés, et produits « dépassés » (avoir le VIP+ compte comme avoir le VIP). */
+export type Ownership = { owned: Set<string>; surpassed: Set<string> };
+
+type Priced = { slug: string; price_ecus: number | string; one_time: number | boolean; upgrade_from: string | null };
+
+async function ownershipOf(conn: PoolConnection, userId: number): Promise<Ownership> {
+  const [rows] = await conn.execute(
+    `SELECT DISTINCT pp.product_slug AS slug, p.upgrade_from FROM product_purchases pp
+     LEFT JOIN products p ON p.slug = pp.product_slug WHERE pp.user_id = ?`, [userId]);
+  const own: Ownership = { owned: new Set(), surpassed: new Set() };
+  for (const r of rows as any[]) {
+    own.owned.add(String(r.slug));
+    if (r.upgrade_from) own.surpassed.add(String(r.upgrade_from));
   }
-  if (product.upgrade_from && await owns(String(product.upgrade_from))) {
-    const [rows] = await conn.execute('SELECT price_ecus FROM products WHERE slug = ? LIMIT 1', [product.upgrade_from]);
-    const base = Array.isArray(rows) && rows.length > 0 ? Number((rows[0] as any).price_ecus) : 0;
+  return own;
+}
+
+/**
+ * Prix à payer pour ce joueur : un produit « montée en gamme » ne coûte que la différence s'il a déjà le précédent.
+ * basePrices : prix de chaque produit (actif ou non), pour retrouver celui du produit précédent.
+ */
+export function priceFor(product: Priced, own: Ownership, basePrices: Map<string, number>): { price: number; owned: boolean; upgrade: boolean } {
+  const owned = Boolean(product.one_time) && (own.owned.has(product.slug) || own.surpassed.has(product.slug));
+  if (product.upgrade_from && own.owned.has(product.upgrade_from)) {
+    const base = basePrices.get(product.upgrade_from) ?? 0;
     return { price: Math.max(0, Number(product.price_ecus) - base), owned, upgrade: true };
   }
   return { price: Number(product.price_ecus), owned, upgrade: false };
+}
+
+async function basePricesOf(conn: PoolConnection): Promise<Map<string, number>> {
+  const [rows] = await conn.execute('SELECT slug, price_ecus FROM products');
+  return new Map((rows as any[]).map((r) => [String(r.slug), Number(r.price_ecus)]));
 }
 
 export type PurchaseResult = { purchaseId: number; commandId: number; price: number; balance: number; duplicated: boolean };
@@ -93,7 +106,7 @@ export async function purchaseProduct(input: {
       [input.productSlug]);
     const product = Array.isArray(products) ? (products[0] as any) : null;
     if (!product || !product.active) throw new ShopError('produit_indisponible', 'Ce produit n\'est pas en vente', 404);
-    const { price, owned, upgrade } = await priceFor(conn, Number(user.id), product);
+    const { price, owned, upgrade } = priceFor(product, await ownershipOf(conn, Number(user.id)), await basePricesOf(conn));
     if (owned) throw new ShopError('deja_possede', `Tu as déjà ${product.name}`);
     const balance = Number(user.ecus ?? 0);
     if (balance < price) throw new ShopError('ecus_insuffisants', `Il te manque ${price - balance} Écus`);
@@ -151,8 +164,9 @@ export async function createLinkCode(userId: number): Promise<{ code: string; ex
 }
 
 /**
- * /lier en jeu : le pseudo du compte doit être celui du joueur, et l'uuid ne peut être lié qu'à un seul compte.
- * Le pseudo du compte suit ensuite le joueur (mis à jour s'il change de pseudo Minecraft).
+ * /lier en jeu : le code prouve le compte du site, le joueur en jeu prouve le compte Minecraft. L'uuid ne peut être lié
+ * qu'à un seul compte, et le compte prend le pseudo du joueur : si un autre compte occupait ce pseudo (réservé avant que
+ * le vrai joueur s'inscrive), il le rend et reçoit un pseudo provisoire. Le pseudo suit ensuite le joueur.
  */
 export async function linkAccount(input: { code: string; uuid: string; name: string }): Promise<{ pseudo: string }> {
   if (!isMcUuid(input.uuid) || !isMcName(input.name)) throw new ShopError('joueur_invalide', 'Joueur invalide', 400);
@@ -166,16 +180,18 @@ export async function linkAccount(input: { code: string; uuid: string; name: str
       'SELECT id, pseudo, mc_uuid FROM users WHERE link_code = ? AND link_code_expires_at > NOW() FOR UPDATE', [code]);
     const user = Array.isArray(rows) ? (rows[0] as any) : null;
     if (!user) throw new ShopError('code_invalide', 'Code inconnu ou expiré : demande-en un nouveau sur ton profil');
-    if (String(user.pseudo).toLowerCase() !== input.name.toLowerCase()) {
-      throw new ShopError('pseudo_different', `Ce code appartient au compte ${user.pseudo}, pas à ${input.name}`);
-    }
     const [other] = await conn.execute('SELECT id FROM users WHERE mc_uuid = ? AND id <> ?', [input.uuid, user.id]);
     if (Array.isArray(other) && other.length > 0) throw new ShopError('deja_lie', 'Ce joueur est déjà lié à un autre compte');
+    const [holders] = await conn.execute('SELECT id FROM users WHERE pseudo = ? AND id <> ? FOR UPDATE', [input.name, user.id]);
+    for (const holder of holders as any[]) {
+      await conn.execute('UPDATE users SET pseudo = ? WHERE id = ?', [`libre_${holder.id}`, holder.id]);
+      log({ etape: 'pseudo-rendu', userId: Number(holder.id), pseudo: input.name, au: Number(user.id) });
+    }
     await conn.execute(
       `UPDATE users SET mc_uuid = ?, pseudo = ?, mc_linked_at = NOW(), link_code = NULL, link_code_expires_at = NULL WHERE id = ?`,
       [input.uuid, input.name, user.id]);
     await conn.commit();
-    log({ etape: 'compte-lie', userId: Number(user.id), joueur: input.name, uuid: input.uuid });
+    log({ etape: 'compte-lie', userId: Number(user.id), joueur: input.name, uuid: input.uuid, ancienPseudo: user.pseudo });
     return { pseudo: input.name };
   } catch (error) {
     await conn.rollback();
@@ -204,23 +220,24 @@ export async function userIdForUuid(uuid: string): Promise<number | null> {
   return Array.isArray(rows) && rows.length > 0 ? Number((rows[0] as any).id) : null;
 }
 
-/** Produits en vente avec le prix pour ce joueur (montée en gamme, déjà possédé). */
+/** Produits en vente avec le prix pour ce joueur (montée en gamme, déjà possédé) : deux requêtes, quel que soit le catalogue. */
 export async function catalogFor(userId: number | null) {
   const db = await getDbPool();
   const conn = await db.getConnection();
   try {
     const [rows] = await conn.execute(
-      `SELECT id, slug, name, description, category, price_ecus, one_time, upgrade_from, image_url, is_new
-       FROM products WHERE active = 1 ORDER BY sort_order ASC, id ASC`);
-    const out = [];
-    for (const p of rows as any[]) {
-      const pricing = userId ? await priceFor(conn, userId, p) : { price: Number(p.price_ecus), owned: false, upgrade: false };
-      out.push({
+      `SELECT id, slug, name, description, category, price_ecus, one_time, upgrade_from, image_url, is_new, active
+       FROM products ORDER BY sort_order ASC, id ASC`);
+    const products = rows as any[];
+    const basePrices = new Map(products.map((p) => [String(p.slug), Number(p.price_ecus)]));
+    const own = userId ? await ownershipOf(conn, userId) : null;
+    return products.filter((p) => p.active).map((p) => {
+      const pricing = own ? priceFor(p, own, basePrices) : { price: Number(p.price_ecus), owned: false, upgrade: false };
+      return {
         slug: String(p.slug), name: String(p.name), description: p.description ?? null, category: String(p.category),
         price: pricing.price, basePrice: Number(p.price_ecus), owned: pricing.owned, upgrade: pricing.upgrade,
-      });
-    }
-    return out;
+      };
+    });
   } finally {
     conn.release();
   }

@@ -1,9 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
+import { clientIp, limiter } from '../utils/http.js';
 import { applyAcks, claimCommands, isMcName, isMcUuid, recordHeartbeat } from '../services/serverQueueService.js';
 import { recordServerStats } from '../services/statsService.js';
 import { ShopError, balancesFor, catalogFor, linkAccount, purchaseProduct, userIdForUuid } from '../services/shopService.js';
@@ -13,7 +13,7 @@ import { ShopError, balancesFor, catalogFor, linkAccount, purchaseProduct, userI
 
 export const serverRouter = Router();
 
-const serverLimiter = rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: true, legacyHeaders: false });
+const serverLimiter = limiter({ windowMs: 60_000, limit: 600 });
 
 function requireServerToken(req: Request, res: Response, next: NextFunction) {
   const expected = env.VALORIA_SERVER_TOKEN;
@@ -22,8 +22,7 @@ function requireServerToken(req: Request, res: Response, next: NextFunction) {
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    // Derrière Cloudflare, req.ip est le pod cloudflared : l'IP de l'appelant est dans CF-Connecting-IP
-    const ip = req.get('cf-connecting-ip') || req.ip;
+    const ip = clientIp(req);
     console.warn(JSON.stringify({ evt: 'serveur', etape: 'jeton-refuse', ip, ua: req.get('user-agent') ?? null, ts: new Date().toISOString() }));
     return res.status(401).json({ error: 'Jeton invalide' });
   }

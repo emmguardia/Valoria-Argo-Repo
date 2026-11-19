@@ -186,6 +186,7 @@ export default function ConnexionPage() {
                       id="pseudo"
                       type="text"
                       placeholder="TonPseudo"
+                      maxLength={16}
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent focus:text-gray-900 outline-none"
                     />
                   </div>

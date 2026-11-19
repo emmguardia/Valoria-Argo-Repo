@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { IP_CHECKED_VOTE_SITES } from '../db/mysql.js';
 
 export type VoteSiteKey = 'serveur-prive' | 'top-serveurs' | 'serveursminecraft' | 'liste-serveurs-minecraft';
 
@@ -19,6 +20,8 @@ export interface VoteCheckInput {
 export interface VoteValidationResult {
   ok: boolean;
   reason?: string;
+  // Heure du vote donnée par le site (Serveur-Privé) : un vote déjà compté n'est pas récompensé une 2e fois
+  votedAt?: Date;
 }
 
 // Aucun site de vote ne prévient Valoria quand quelqu'un vote : c'est le joueur qui demande la vérification
@@ -76,7 +79,10 @@ export function listSites(): VoteSiteMeta[] {
 async function checkServeurPrive({ mcUsername }: VoteCheckInput): Promise<VoteValidationResult> {
   const url = `https://serveur-prive.net/api/v1/servers/${encodeURIComponent(env.VOTE_SP_TOKEN!)}/votes/${encodeURIComponent(mcUsername)}?type=username`;
   const { text } = await fetchWithTimeout(url);
-  return parseJson(text)?.success === true ? { ok: true } : { ok: false, reason: 'not_voted' };
+  const json = parseJson(text);
+  if (json?.success !== true) return { ok: false, reason: 'not_voted' };
+  const votedAt = Number(json.data?.voted_at);
+  return { ok: true, ...(Number.isFinite(votedAt) && votedAt > 0 ? { votedAt: new Date(votedAt * 1000) } : {}) };
 }
 
 // Top-Serveurs : « claim » par pseudo, vote des 2 dernières heures. 1 = réclamable, 2 = déjà réclamé, 0 = introuvable.
@@ -114,11 +120,19 @@ const CHECKERS: Record<VoteSiteKey, (i: VoteCheckInput) => Promise<VoteValidatio
   'liste-serveurs-minecraft': checkListeServeursMinecraft,
 };
 
-// Sites vérifiés par l'IP du joueur : une même IP ne peut valoir qu'un vote par jour, quel que soit le pseudo.
-export const IP_CHECKED_SITES: ReadonlySet<VoteSiteKey> = new Set(['serveursminecraft', 'liste-serveurs-minecraft']);
+// Sites vérifiés par l'IP du joueur : une même IP ne vaut qu'un vote, quel que soit le pseudo, pendant la durée où le
+// site considère le vote valable (sinon un vote de 23 h serait réclamé une 2e fois après minuit).
+export const IP_VOTE_WINDOW_MINUTES: Record<(typeof IP_CHECKED_VOTE_SITES)[number], number> = {
+  'serveursminecraft': 24 * 60,
+  'liste-serveurs-minecraft': 180,
+};
+
+export function isIpCheckedSite(key: VoteSiteKey): key is keyof typeof IP_VOTE_WINDOW_MINUTES {
+  return Object.hasOwn(IP_VOTE_WINDOW_MINUTES, key);
+}
 
 export function isKnownSite(key: string): key is VoteSiteKey {
-  return key in CHECKERS;
+  return Object.hasOwn(CHECKERS, key);
 }
 
 export async function checkVote(site: VoteSiteKey, input: VoteCheckInput): Promise<VoteValidationResult> {

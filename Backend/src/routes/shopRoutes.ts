@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { authReadLimiter, paymentsLimiter } from '../middleware/rateLimitMiddleware.js';
@@ -10,7 +11,7 @@ import { ShopError, catalogFor, createLinkCode, purchaseProduct } from '../servi
 
 export const shopRouter = Router();
 
-const userIdOf = (req: any) => Number(req.user?.userId);
+const userIdOf = (req: Request) => Number(req.user!.userId);
 
 shopRouter.get('/catalog', authReadLimiter, authenticateToken, async (req, res) => {
   try {
